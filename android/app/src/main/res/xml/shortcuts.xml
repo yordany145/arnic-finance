@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="quick_expense"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_expense"
+        android:shortcutShortLabel="@string/shortcut_expense_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.arnic.finance"
+            android:targetClass="com.arnic.finance.quick.QuickEntryActivity">
+            <extra android:name="type" android:value="expense" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="quick_income"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_income"
+        android:shortcutShortLabel="@string/shortcut_income_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.arnic.finance"
+            android:targetClass="com.arnic.finance.quick.QuickEntryActivity">
+            <extra android:name="type" android:value="income" />
+        </intent>
+    </shortcut>
+</shortcuts>

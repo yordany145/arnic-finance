@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Arnic Finance</string>
+    <!-- Máx. 18 caracteres: límite del texto de una tile. -->
+    <string name="tile_expense">Arnic: Gasto</string>
+    <string name="tile_income">Arnic: Ingreso</string>
+    <string name="shortcut_expense_short">Registrar gasto</string>
+    <string name="shortcut_income_short">Registrar ingreso</string>
+    <string name="quick_expense">GASTO</string>
+    <string name="quick_income">INGRESO</string>
+    <string name="quick_save">GUARDAR</string>
+    <string name="quick_enter_amount">Escribe un monto</string>
+    <string name="quick_delete">Borrar</string>
+    <string name="quick_decimal">Punto decimal</string>
+    <string name="quick_saved_expense">Gasto guardado</string>
+    <string name="quick_saved_income">Ingreso guardado</string>
+    <string name="quick_save_failed">No se pudo guardar. Abre la app e inténtalo de nuevo.</string>
+    <string name="quick_open_app_first">Abre Arnic Finance una vez para preparar tus datos y categorías.</string>
+    <string name="quick_update_app">Tus datos los creó una versión más nueva de la app. Actualiza Arnic Finance.</string>
+    <string name="quick_open_app">ABRIR ARNIC</string>
+    <string name="widget_description">Registra gastos e ingresos con un toque</string>
+    <string name="widget_today_expenses">Hoy: %1$s en gastos</string>
+    <string name="widget_open_app">Abre Arnic Finance</string>
+    <string name="widget_expense">− Gasto</string>
+    <string name="widget_income">+ Ingreso</string>
+    <string name="notif_channel_budgets">Presupuestos</string>
+    <string name="notif_channel_budgets_desc">Avisos al acercarte o llegar a un límite o meta</string>
+    <string name="notif_approaching_expense">⚠️ Acercándote al límite: %1$s</string>
+    <string name="notif_reached_expense">🚨 Límite alcanzado: %1$s</string>
+    <string name="notif_approaching_savings">🐷 Casi llegas a tu meta de ahorro</string>
+    <string name="notif_reached_savings">🎉 ¡Meta de ahorro cumplida!</string>
+    <string name="notif_body_expense">%1$s de %2$s gastados (%3$d%%)</string>
+    <string name="notif_body_savings">%1$s de %2$s (%3$d%%)</string>
+</resources>
+

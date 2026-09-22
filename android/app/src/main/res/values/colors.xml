@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="arnic_brand">#185EA8</color>
+    <color name="arnic_surface">#FFFFFF</color>
+    <color name="arnic_key">#EEF1F5</color>
+    <color name="arnic_key_alt">#D9E3F0</color>
+    <color name="arnic_on_surface">#14181C</color>
+    <color name="arnic_on_surface_variant">#4A5560</color>
+    <color name="arnic_expense">#C62828</color>
+    <color name="arnic_income">#1B7F52</color>
+    <color name="arnic_on_accent">#FFFFFF</color>
+    <color name="arnic_widget_bg">#F4F7FB</color>
+</resources>

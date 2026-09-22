@@ -1,0 +1,88 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      Sin permisos: la app no pide INTERNET (los datos nunca salen del teléfono).
+      Ni la tile, ni el widget, ni los atajos requieren permisos de usuario.
+      (BIND_QUICK_SETTINGS_TILE lo exige el sistema al servicio, no lo pedimos.)
+    -->
+    <!-- Para los avisos de presupuesto (80%/100% de un límite o meta). El usuario
+         lo concede al crear su primer presupuesto (BudgetNotifier.requestPermission),
+         no al abrir la app. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:label="@string/app_name"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- Atajos al mantener pulsado el icono: "Registrar gasto/ingreso". -->
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity>
+
+        <!-- Hoja de registro rápido (nativa, sin Flutter). Tarea propia y fuera de recientes. -->
+        <activity
+            android:name=".quick.QuickEntryActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.arnic.finance.quick"
+            android:theme="@style/Theme.Arnic.QuickEntry" />
+
+        <!-- Tiles del panel de ajustes rápidos. -->
+        <service
+            android:name=".quick.ExpenseTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_expense"
+            android:label="@string/tile_expense"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".quick.IncomeTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_income"
+            android:label="@string/tile_income"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Widget de pantalla de inicio. -->
+        <receiver android:name=".quick.QuickWidgetProvider" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/quick_widget_info" />
+        </receiver>
+
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+    </queries>
+</manifest>
