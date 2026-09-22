@@ -1,9 +1,15 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../data/backup_service.dart';
 import '../../state/providers.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -35,6 +41,56 @@ class SettingsScreen extends ConsumerWidget {
     if (value != null && value.isNotEmpty) {
       await settings.setCurrencySymbol(value);
       quickActions.refreshWidgets();
+    }
+  }
+
+  Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
+    final db = ref.read(databaseProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final json = await BackupService(db).exportJson();
+      final dir = await getTemporaryDirectory();
+      final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+      final file = await File('${dir.path}/arnic_backup_$stamp.json').writeAsString(json);
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], subject: 'Copia de seguridad de Arnic Finance'));
+    } catch (e) {
+      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('No se pudo exportar: $e')));
+    }
+  }
+
+  Future<void> _importBackup(BuildContext context, WidgetRef ref) async {
+    final db = ref.read(databaseProvider);
+    final quickActions = ref.read(quickActionsProvider);
+    final messenger = ScaffoldMessenger.of(context);
+
+    final picked = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['json'], dialogTitle: 'Elige tu copia de seguridad');
+    if (picked == null || !context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('¿Restaurar copia de seguridad?'),
+        content: const Text(
+          'Esto reemplaza TODOS los datos actuales (movimientos, categorías, cuentas y presupuestos) por los del archivo. '
+          'No se puede deshacer.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Restaurar')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      final bytes = await picked.readAsBytes();
+      await BackupService(db).restoreFromJson(utf8.decode(bytes));
+      quickActions.refreshWidgets();
+      if (context.mounted) messenger.showSnackBar(const SnackBar(content: Text('Copia restaurada.')));
+    } on FormatException catch (e) {
+      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text('No se pudo restaurar: $e')));
     }
   }
 
@@ -130,6 +186,23 @@ class SettingsScreen extends ConsumerWidget {
               onChanged: !supported ? null : (value) => ref.read(appLockEnabledProvider.notifier).set(value),
             );
           }),
+          const Divider(height: 32),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Text('RESPALDO', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.upload_outlined),
+            title: const Text('Exportar copia de seguridad'),
+            subtitle: const Text('Un archivo con todo tu historial, para guardarlo donde quieras'),
+            onTap: () => _exportBackup(context, ref),
+          ),
+          ListTile(
+            leading: const Icon(Icons.download_outlined),
+            title: const Text('Restaurar desde un archivo'),
+            subtitle: const Text('Reemplaza todos los datos actuales por los de la copia'),
+            onTap: () => _importBackup(context, ref),
+          ),
           const Divider(height: 32),
           const ListTile(
             leading: Icon(Icons.lock_outline),
