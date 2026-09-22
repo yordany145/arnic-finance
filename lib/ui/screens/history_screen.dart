@@ -25,8 +25,9 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   final _hidden = <String>{};
 
   Future<void> _delete(Movement m) async {
-    final repo = ref.read(movementRepositoryProvider);
-    final quick = ref.read(quickActionsProvider);
+    final container = ProviderScope.containerOf(context, listen: false);
+    final repo = container.read(movementRepositoryProvider);
+    final quick = container.read(quickActionsProvider);
     setState(() => _hidden.add(m.id));
     await repo.delete(m.id);
     quick.refreshWidgets();
@@ -40,7 +41,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           onPressed: () async {
             await repo.restore(m.id);
             quick.refreshWidgets();
-            unawaited(checkBudgetAlerts(ref));
+            unawaited(checkBudgetAlerts(container));
             if (mounted) setState(() => _hidden.remove(m.id));
           },
         ),
@@ -48,6 +49,8 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   }
 
   Future<void> _pickCategory() async {
+    // Se captura antes del `await showModalBottomSheet` por la misma razón que en `_delete`.
+    final notifier = ref.read(historyFilterProvider.notifier);
     final current = ref.read(historyFilterProvider);
     final expense = ref.read(categoriesProvider(TxType.expense)).value ?? const <Category>[];
     final income = ref.read(categoriesProvider(TxType.income)).value ?? const <Category>[];
@@ -91,9 +94,9 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       ),
     );
     if (picked == 'all') {
-      ref.read(historyFilterProvider.notifier).setCategory(null);
+      notifier.setCategory(null);
     } else if (picked is Category) {
-      ref.read(historyFilterProvider.notifier).setCategory(picked);
+      notifier.setCategory(picked);
     }
   }
 

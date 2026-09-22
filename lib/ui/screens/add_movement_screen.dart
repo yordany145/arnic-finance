@@ -85,7 +85,7 @@ class _AddMovementScreenState extends ConsumerState<AddMovementScreen> {
     );
     if (date == null || !mounted) return;
     final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(initial));
-    if (time == null) return;
+    if (time == null || !mounted) return;
     setState(() => _pickedAt = DateTime(date.year, date.month, date.day, time.hour, time.minute));
   }
 
@@ -99,6 +99,14 @@ class _AddMovementScreenState extends ConsumerState<AddMovementScreen> {
     }
     if (categoryId == null || accountId == null) return;
 
+    // Se captura todo lo que hace falta ANTES del await: si el usuario cierra
+    // la pantalla mientras se guarda, `ref` deja de ser válido pero estas
+    // referencias siguen funcionando (el container vive mientras viva la app).
+    final container = ProviderScope.containerOf(context, listen: false);
+    final repo = container.read(movementRepositoryProvider);
+    final quickActions = container.read(quickActionsProvider);
+    final currency = container.read(currencySymbolProvider).value ?? '';
+
     setState(() => _saving = true);
     final input = MovementInput(
       type: _type,
@@ -108,17 +116,15 @@ class _AddMovementScreenState extends ConsumerState<AddMovementScreen> {
       occurredAt: _pickedAt ?? DateTime.now(),
       note: _note.text,
     );
-    final repo = ref.read(movementRepositoryProvider);
     if (_editing) {
       await repo.update(widget.editId!, input);
     } else {
       await repo.add(input);
     }
-    ref.read(quickActionsProvider).refreshWidgets();
-    unawaited(checkBudgetAlerts(ref));
+    quickActions.refreshWidgets();
+    unawaited(checkBudgetAlerts(container));
     HapticFeedback.lightImpact();
 
-    final currency = ref.read(currencySymbolProvider).value ?? '';
     if (!mounted) return;
     context.pop();
     messenger
@@ -141,10 +147,12 @@ class _AddMovementScreenState extends ConsumerState<AddMovementScreen> {
       ),
     );
     if (ok != true || !mounted) return;
-    final repo = ref.read(movementRepositoryProvider);
+    final container = ProviderScope.containerOf(context, listen: false);
+    final repo = container.read(movementRepositoryProvider);
+    final quickActions = container.read(quickActionsProvider);
     final messenger = ScaffoldMessenger.of(context);
     await repo.delete(widget.editId!);
-    ref.read(quickActionsProvider).refreshWidgets();
+    quickActions.refreshWidgets();
     if (!mounted) return;
     context.pop();
     messenger
@@ -155,8 +163,8 @@ class _AddMovementScreenState extends ConsumerState<AddMovementScreen> {
           label: 'Deshacer',
           onPressed: () {
             repo.restore(widget.editId!);
-            ref.read(quickActionsProvider).refreshWidgets();
-            unawaited(checkBudgetAlerts(ref));
+            quickActions.refreshWidgets();
+            unawaited(checkBudgetAlerts(container));
           },
         ),
       ));

@@ -12,6 +12,7 @@ class PeriodChips extends ConsumerWidget {
   const PeriodChips({super.key});
 
   Future<void> _pickRange(BuildContext context, WidgetRef ref) async {
+    final notifier = ref.read(historyFilterProvider.notifier);
     final now = ref.read(nowProvider);
     final current = ref.read(historyFilterProvider).customRange;
     final picked = await showDateRangePicker(
@@ -24,7 +25,7 @@ class PeriodChips extends ConsumerWidget {
       locale: const Locale('es', 'DO'),
     );
     if (picked != null) {
-      ref.read(historyFilterProvider.notifier).setCustomRange(DateRange.days(picked.start, picked.end));
+      notifier.setCustomRange(DateRange.days(picked.start, picked.end));
     }
   }
 

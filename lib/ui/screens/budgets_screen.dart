@@ -118,6 +118,9 @@ class _BudgetEditorState extends ConsumerState<_BudgetEditor> {
     if (pesos == null || pesos <= 0) return;
     final minor = (pesos * 100).round();
     final repo = ref.read(budgetRepositoryProvider);
+    // Capturado antes del await: `ref` puede dejar de ser válido si la hoja se
+    // cierra mientras se guarda.
+    final notifier = ref.read(budgetNotifierProvider);
 
     if (widget.existing != null) {
       await repo.updateAmount(widget.existing!.id, minor);
@@ -132,7 +135,7 @@ class _BudgetEditorState extends ConsumerState<_BudgetEditor> {
           await repo.createSavingsBudget(amountMinor: minor);
       }
       // Sólo tiene sentido pedir el permiso cuando ya hay algo que notificar.
-      await ref.read(budgetNotifierProvider).requestPermission();
+      await notifier.requestPermission();
     }
     if (mounted) Navigator.pop(context);
   }

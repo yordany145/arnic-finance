@@ -2,6 +2,7 @@ package com.arnic.finance.quick
 
 import android.content.ContentValues
 import android.content.Context
+import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteDatabase
 import java.io.File
 import java.text.NumberFormat
@@ -69,6 +70,10 @@ object QuickDb {
         }
         db.enableWriteAheadLogging() // mismo modo que usa Dart (PRAGMA journal_mode=WAL)
         db.setForeignKeyConstraintsEnabled(true)
+        // Igual que NativeDatabase (Dart) y sqlite3_busy_timeout (Swift): sin esto,
+        // si la app Flutter está escribiendo justo cuando se guarda desde la hoja
+        // rápida, esta conexión falla al instante con SQLITE_BUSY en vez de esperar.
+        db.rawQuery("PRAGMA busy_timeout = 5000", null).use { it.moveToFirst() }
         return Status.Ready(db)
     }
 
@@ -201,9 +206,13 @@ object QuickDb {
             }
             db.insertOrThrow("budget_alerts", null, values)
             true
-        } catch (e: Exception) {
-            false // ya existía: ya se avisó.
+        } catch (e: SQLiteConstraintException) {
+            false // chocó con la clave primaria budgetId+periodKey+level: ya se avisó.
         }
+        // Cualquier otro error (BD cerrada, disco lleno, etc.) se propaga: no debe
+        // confundirse con "ya notificado". Lo atrapa el try/catch de quien llama
+        // (QuickEntryActivity.save / BudgetAlertChecker), que ya asume que un aviso
+        // fallido no debe impedir que el movimiento guardado se vea.
     }
 
     // ── Reglas del teclado y formato (mismas que lib/core/money.dart) ───────────

@@ -30,7 +30,9 @@ class BudgetTile extends StatelessWidget {
                 ? const Color(0xFFC77800)
                 : scheme.primary;
 
-    final pct = (progress.ratio * 100).clamp(0, 999).round();
+    // Sin límite inferior: una meta de ahorro con el mes en rojo debe poder
+    // mostrar un porcentaje negativo en vez de un engañoso "0%".
+    final pct = (progress.ratio * 100).clamp(-999, 999).round();
     final subtitle = savings
         ? '${formatMoney(progress.currentMinor, currency)} de ${formatMoney(budget.amountMinor, currency)} ahorrados'
         : '${formatMoney(progress.currentMinor, currency)} de ${formatMoney(budget.amountMinor, currency)}'

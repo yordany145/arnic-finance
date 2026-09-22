@@ -116,6 +116,24 @@ void main() {
     expect(() => categories.delete(inc.first.id), throwsStateError);
   });
 
+  test('borrar las dos últimas categorías a la vez: sólo una debe pasar (transaccional)', () async {
+    final inc = await categories.watch(TxType.income).first;
+    for (final c in inc.skip(2)) {
+      await categories.delete(c.id);
+    }
+    final remaining = await categories.watch(TxType.income).first;
+    expect(remaining, hasLength(2));
+
+    // Sin transacción, ambos borrados verían "queda 1" antes de que cualquiera
+    // escriba y los dos pasarían, dejando cero categorías de ese tipo.
+    final results = await Future.wait([
+      categories.delete(remaining[0].id).then((_) => true).catchError((_) => false),
+      categories.delete(remaining[1].id).then((_) => true).catchError((_) => false),
+    ]);
+    expect(results.where((ok) => ok), hasLength(1));
+    expect(await categories.watch(TxType.income).first, hasLength(1));
+  });
+
   test('categorías por uso: la más usada primero', () async {
     for (var i = 0; i < 3; i++) {
       await movements.add(input(TxType.expense, 100, 'exp_fuel', DateTime.now()));

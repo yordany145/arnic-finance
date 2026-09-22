@@ -76,18 +76,23 @@ class DriftCategoryRepository implements CategoryRepository {
 
   /// Borrado lógico: los movimientos antiguos conservan su categoría (y su
   /// nombre) en el historial. Siempre debe quedar al menos una por tipo.
+  ///
+  /// Transaccional (igual que `DriftAccountRepository.delete`): comprobar y
+  /// escribir en pasos separados sin transacción permitiría que dos borrados
+  /// concurrentes de las dos últimas categorías de un tipo pasaran ambos la
+  /// comprobación antes de que cualquiera escribiera.
   @override
-  Future<void> delete(String id) async {
-    final cat = await getById(id);
-    if (cat == null) return;
-    final remaining = await (_db.select(_db.categories)
-          ..where((c) => c.type.equalsValue(cat.type) & c.deletedAt.isNull() & c.id.equals(id).not()))
-        .get();
-    if (remaining.isEmpty) {
-      throw StateError('Debe existir al menos una categoría de ${cat.type.pluralLabel.toLowerCase()}.');
-    }
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await (_db.update(_db.categories)..where((c) => c.id.equals(id)))
-        .write(CategoriesCompanion(deletedAt: Value(now), updatedAt: Value(now)));
-  }
+  Future<void> delete(String id) => _db.transaction(() async {
+        final cat = await getById(id);
+        if (cat == null) return;
+        final remaining = await (_db.select(_db.categories)
+              ..where((c) => c.type.equalsValue(cat.type) & c.deletedAt.isNull() & c.id.equals(id).not()))
+            .get();
+        if (remaining.isEmpty) {
+          throw StateError('Debe existir al menos una categoría de ${cat.type.pluralLabel.toLowerCase()}.');
+        }
+        final now = DateTime.now().millisecondsSinceEpoch;
+        await (_db.update(_db.categories)..where((c) => c.id.equals(id)))
+            .write(CategoriesCompanion(deletedAt: Value(now), updatedAt: Value(now)));
+      });
 }

@@ -10,6 +10,10 @@ class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   Future<void> _editCurrency(BuildContext context, WidgetRef ref, String current) async {
+    // Capturados antes del await: `ref` puede dejar de ser válido si la pantalla
+    // se cierra mientras el diálogo está abierto.
+    final settings = ref.read(settingsRepositoryProvider);
+    final quickActions = ref.read(quickActionsProvider);
     final controller = TextEditingController(text: current);
     final value = await showDialog<String>(
       context: context,
@@ -29,8 +33,8 @@ class SettingsScreen extends ConsumerWidget {
     );
     controller.dispose();
     if (value != null && value.isNotEmpty) {
-      await ref.read(settingsRepositoryProvider).setCurrencySymbol(value);
-      ref.read(quickActionsProvider).refreshWidgets();
+      await settings.setCurrencySymbol(value);
+      quickActions.refreshWidgets();
     }
   }
 

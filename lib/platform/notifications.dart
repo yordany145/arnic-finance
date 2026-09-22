@@ -47,7 +47,7 @@ class BudgetNotifier {
       (false, AlertLevel.approaching) => '⚠️ Acercándote al límite: ${progress.budget.title}',
       (false, AlertLevel.reached) => '🚨 Límite alcanzado: ${progress.budget.title}',
     };
-    final pct = (progress.ratio * 100).clamp(0, 999).round();
+    final pct = (progress.ratio * 100).clamp(-999, 999).round();
     final body = savings
         ? '${formatMoney(progress.currentMinor, currency)} de ${formatMoney(progress.budget.amountMinor, currency)} ($pct%)'
         : '${formatMoney(progress.currentMinor, currency)} de ${formatMoney(progress.budget.amountMinor, currency)} gastados ($pct%)';

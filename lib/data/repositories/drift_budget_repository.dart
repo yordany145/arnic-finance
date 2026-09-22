@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:drift/drift.dart';
+import 'package:sqlite3/sqlite3.dart' show SqliteException;
 import 'package:uuid/uuid.dart';
 
 import '../../domain/budget.dart';
@@ -150,8 +151,13 @@ class DriftBudgetRepository implements BudgetRepository {
             firedAt: DateTime.now().millisecondsSinceEpoch,
           ));
       return true; // se insertó: es la primera vez.
-    } catch (_) {
-      return false; // ya existía (choque de clave primaria): ya se avisó.
+    } on SqliteException catch (e) {
+      // SQLITE_CONSTRAINT (código primario 19): chocó con la clave primaria
+      // budgetId+periodKey+level, o sea que ya se avisó. Cualquier otro error
+      // (disco lleno, BD cerrada, etc.) se relanza: no debe confundirse con
+      // "ya notificado" y quedar silenciado.
+      if (e.resultCode == 19) return false;
+      rethrow;
     }
   }
 }

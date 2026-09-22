@@ -49,9 +49,14 @@ final budgetAlertServiceProvider = Provider<BudgetAlertService>((ref) {
 /// Llamar después de cualquier cambio en movimientos (guardar/editar/borrar/
 /// restaurar) y al reanudar la app. No lanza si falla (nunca debe romper el
 /// guardado de un movimiento).
-Future<void> checkBudgetAlerts(WidgetRef ref) async {
+///
+/// Recibe el [ProviderContainer] (no un [WidgetRef]) a propósito: se llama casi
+/// siempre después de un `await` en un handler de UI, y un `WidgetRef` deja de
+/// ser válido si el widget se desmontó mientras tanto. El container, en cambio,
+/// vive mientras viva la app.
+Future<void> checkBudgetAlerts(ProviderContainer container) async {
   try {
-    await ref.read(budgetAlertServiceProvider).check(ref.read(nowProvider));
+    await container.read(budgetAlertServiceProvider).check(container.read(nowProvider));
   } catch (_) {
     // Un aviso fallido no debe impedir que el movimiento ya guardado se vea.
   }
