@@ -8,6 +8,9 @@
          lo concede al crear su primer presupuesto (BudgetNotifier.requestPermission),
          no al abrir la app. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Para el bloqueo de la app con huella/rostro/PIN del sistema (local_auth).
+         No es un permiso "peligroso": el sistema no muestra diálogo de consentimiento. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <application
         android:label="@string/app_name"

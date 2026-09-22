@@ -55,5 +55,9 @@ dependencies {
     // Ya llega transitivamente vía flutter_local_notifications, pero se declara
     // explícito para no depender de la resolución de otro plugin.
     implementation("androidx.core:core-ktx:1.13.1")
+    // LaunchTheme necesita un padre Theme.AppCompat (lo exige local_auth). Llega
+    // transitivamente vía local_auth_android, pero se declara explícito por la
+    // misma razón que core-ktx arriba.
+    implementation("androidx.appcompat:appcompat:1.7.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

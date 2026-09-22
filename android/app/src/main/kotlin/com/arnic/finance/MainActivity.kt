@@ -10,7 +10,7 @@ import android.os.Build
 import com.arnic.finance.quick.ExpenseTileService
 import com.arnic.finance.quick.IncomeTileService
 import com.arnic.finance.quick.QuickWidgetProvider
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
@@ -18,8 +18,11 @@ import io.flutter.plugin.common.MethodChannel
  * Actividad de la app completa (Flutter). Sólo añade el canal que usa la pantalla
  * de Ajustes para ofrecer las tiles y el widget. El registro rápido NO pasa por
  * aquí: vive en [com.arnic.finance.quick.QuickEntryActivity].
+ *
+ * `FlutterFragmentActivity` (no `FlutterActivity`): lo exige `local_auth` para el
+ * bloqueo de la app con biometría/PIN del sistema (necesita una `FragmentActivity`).
  */
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->

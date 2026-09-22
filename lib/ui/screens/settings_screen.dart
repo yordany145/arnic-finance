@@ -112,6 +112,25 @@ class SettingsScreen extends ConsumerWidget {
               subtitle: Text('Se activan desde los ajustes de iOS. Consulta docs/IOS.md.'),
             ),
           const Divider(height: 32),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Text('SEGURIDAD', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant)),
+          ),
+          Builder(builder: (context) {
+            final supported = ref.watch(appLockSupportedProvider).value ?? false;
+            return SwitchListTile(
+              secondary: const Icon(Icons.fingerprint),
+              title: const Text('Bloquear la app'),
+              subtitle: Text(
+                supported
+                    ? 'Pide tu huella, rostro o el PIN del teléfono al abrir la app'
+                    : 'Tu teléfono no tiene huella, rostro ni PIN/patrón configurado: actívalo en Ajustes del sistema primero.',
+              ),
+              value: ref.watch(appLockEnabledProvider),
+              onChanged: !supported ? null : (value) => ref.read(appLockEnabledProvider.notifier).set(value),
+            );
+          }),
+          const Divider(height: 32),
           const ListTile(
             leading: Icon(Icons.lock_outline),
             title: Text('Privacidad'),

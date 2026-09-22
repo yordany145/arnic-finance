@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/money.dart';
+import '../data/app_lock_prefs.dart';
 import '../data/database.dart';
 import '../data/repositories/drift_account_repository.dart';
 import '../data/repositories/drift_budget_repository.dart';
@@ -13,11 +15,40 @@ import '../domain/date_range.dart';
 import '../domain/enums.dart';
 import '../domain/models.dart';
 import '../domain/repositories.dart';
+import '../platform/app_lock.dart';
 import '../platform/notifications.dart';
 import '../platform/quick_actions.dart';
 
 /// Se sobrescribe en `main()` con la base abierta.
 final databaseProvider = Provider<AppDatabase>((ref) => throw UnimplementedError('databaseProvider no inicializado'));
+
+/// Se sobrescribe en `main()` con la instancia ya cargada.
+final sharedPreferencesProvider =
+    Provider<SharedPreferences>((ref) => throw UnimplementedError('sharedPreferencesProvider no inicializado'));
+
+// ── Bloqueo de la app ────────────────────────────────────────────────────────
+final appLockPrefsProvider = Provider<AppLockPrefs>((ref) => AppLockPrefs(ref.watch(sharedPreferencesProvider)));
+
+final appLockProvider = Provider<AppLock>((ref) => AppLock());
+
+/// Estado en memoria de si el bloqueo está activado, sembrado desde
+/// `AppLockPrefs` al arrancar. Notifier propio (no un stream) porque sólo esta
+/// misma app lo cambia (no el registro rápido nativo).
+class AppLockEnabledNotifier extends Notifier<bool> {
+  @override
+  bool build() => ref.watch(appLockPrefsProvider).enabled;
+
+  void set(bool value) {
+    state = value;
+    ref.read(appLockPrefsProvider).setEnabled(value);
+  }
+}
+
+final appLockEnabledProvider = NotifierProvider<AppLockEnabledNotifier, bool>(AppLockEnabledNotifier.new);
+
+/// `false` si el teléfono no tiene ninguna forma de desbloqueo configurada:
+/// en ese caso no tiene sentido ofrecer el interruptor en Ajustes.
+final appLockSupportedProvider = FutureProvider<bool>((ref) => ref.watch(appLockProvider).isSupported());
 
 // ── Repositorios ─────────────────────────────────────────────────────────────
 // Único punto donde se elige la implementación concreta (local). Una futura

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme.dart';
 import 'navigation/router.dart';
 import 'state/providers.dart';
+import 'ui/screens/app_lock_screen.dart';
 
 class ArnicApp extends ConsumerStatefulWidget {
   const ArnicApp({super.key});
@@ -15,10 +16,12 @@ class ArnicApp extends ConsumerStatefulWidget {
 
 class _ArnicAppState extends ConsumerState<ArnicApp> with WidgetsBindingObserver {
   final _router = buildRouter();
+  bool _locked = false;
 
   @override
   void initState() {
     super.initState();
+    _locked = ref.read(appLockEnabledProvider);
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => checkBudgetAlerts(ProviderScope.containerOf(context, listen: false)));
     WidgetsBinding.instance.addPostFrameCallback((_) => _openPendingRoute());
@@ -40,6 +43,12 @@ class _ArnicAppState extends ConsumerState<ArnicApp> with WidgetsBindingObserver
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Al ir a segundo plano: si el bloqueo está activado, la próxima vez que se
+    // vea la app debe pedir desbloquear (sin importar cuánto haya tardado).
+    if (state == AppLifecycleState.paused && ref.read(appLockEnabledProvider) && !_locked) {
+      setState(() => _locked = true);
+      return;
+    }
     if (state != AppLifecycleState.resumed) return;
     _openPendingRoute();
     // "Hoy"/"este mes" pueden haber cambiado mientras la app dormía.
@@ -69,6 +78,10 @@ class _ArnicAppState extends ConsumerState<ArnicApp> with WidgetsBindingObserver
         GlobalCupertinoLocalizations.delegate,
       ],
       routerConfig: _router,
+      // Tapa toda la app (encima del Navigator) mientras esté bloqueada, sin
+      // perder el Theme/Localizations que MaterialApp ya montó.
+      builder: (context, child) =>
+          _locked ? AppLockScreen(onUnlocked: () => setState(() => _locked = false)) : child!,
     );
   }
 }
