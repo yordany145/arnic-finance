@@ -7,12 +7,15 @@ class AppShell extends StatelessWidget {
 
   final StatefulNavigationShell shell;
 
+  /// El "+" para registrar no aporta ni en Ajustes ni en el chat del asistente
+  /// (allí ya está el campo de texto).
+  static const _hideFabOn = {2, 3};
+
   @override
   Widget build(BuildContext context) {
-    final onSettings = shell.currentIndex == 2;
     return Scaffold(
       body: shell,
-      floatingActionButton: onSettings
+      floatingActionButton: _hideFabOn.contains(shell.currentIndex)
           ? null
           : SizedBox(
               height: 64,
@@ -29,6 +32,7 @@ class AppShell extends StatelessWidget {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Inicio'),
           NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Movimientos'),
+          NavigationDestination(icon: Icon(Icons.smart_toy_outlined), selectedIcon: Icon(Icons.smart_toy), label: 'Asistente'),
           NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Ajustes'),
         ],
       ),

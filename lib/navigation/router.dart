@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../domain/enums.dart';
 import '../ui/screens/accounts_screen.dart';
+import '../ui/screens/assistant_screen.dart';
 import '../ui/screens/budgets_screen.dart';
 import '../ui/screens/add_movement_screen.dart';
 import '../ui/screens/categories_screen.dart';
@@ -21,6 +22,7 @@ GoRouter buildRouter() => GoRouter(
           branches: [
             StatefulShellBranch(routes: [GoRoute(path: '/', builder: (_, _) => const HomeScreen())]),
             StatefulShellBranch(routes: [GoRoute(path: '/history', builder: (_, _) => const HistoryScreen())]),
+            StatefulShellBranch(routes: [GoRoute(path: '/assistant', builder: (_, _) => const AssistantScreen())]),
             StatefulShellBranch(routes: [GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen())]),
           ],
         ),

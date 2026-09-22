@@ -24,6 +24,7 @@ class DriftMovementRepository implements MovementRepository {
         t.occurredAt.isBiggerOrEqualValue(f.range!.start.millisecondsSinceEpoch),
         t.occurredAt.isSmallerThanValue(f.range!.endExclusive.millisecondsSinceEpoch),
       ],
+      if (f.noteQuery != null && f.noteQuery!.isNotEmpty) t.note.like('%${f.noteQuery}%'),
     ]);
   }
 

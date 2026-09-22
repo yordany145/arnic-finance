@@ -8,7 +8,7 @@ import 'models.dart';
 /// decorador sobre la local) sin tocar pantallas.
 
 class MovementFilter {
-  const MovementFilter({this.type, this.categoryId, this.accountId, this.range, this.limit});
+  const MovementFilter({this.type, this.categoryId, this.accountId, this.range, this.limit, this.noteQuery});
 
   final TxType? type;
   final String? categoryId;
@@ -18,6 +18,10 @@ class MovementFilter {
   final DateRange? range;
   final int? limit;
 
+  /// Sólo movimientos cuya nota contenga este texto (sin distinguir
+  /// mayúsculas/minúsculas). Usado por el asistente para buscar por palabra.
+  final String? noteQuery;
+
   @override
   bool operator ==(Object other) =>
       other is MovementFilter &&
@@ -25,10 +29,11 @@ class MovementFilter {
       other.categoryId == categoryId &&
       other.accountId == accountId &&
       other.range == range &&
-      other.limit == limit;
+      other.limit == limit &&
+      other.noteQuery == noteQuery;
 
   @override
-  int get hashCode => Object.hash(type, categoryId, accountId, range, limit);
+  int get hashCode => Object.hash(type, categoryId, accountId, range, limit, noteQuery);
 }
 
 abstract interface class MovementRepository {
