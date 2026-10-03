@@ -4,13 +4,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_CATEGORY_RULES = {
-    "Comida": ["supermerc", "colmado", "restaur", "pizza", "burger", "kfc", "mcdonald", "cafe", "panader", "sirena", "nacional", "jumbo", "bravo", "ubereats", "pedidosya"],
+    "Comida": ["supermerc", "hummus", " rest", "rest ", "colmado", "restaur", "pizza", "burger", "kfc", "mcdonald", "cafe", "panader", "sirena", "nacional", "jumbo", "bravo", "ubereats", "pedidosya"],
     "Combustible": ["gasolin", "combustible", "petrol", "ecopetroleo", "shell", "texaco", "esso", "sunix", "isla", "total"],
-    "Transporte": ["uber", "indrive", "taxi", "peaje", "metro"],
+    "Transporte": ["automotriz", "uber", "indrive", "taxi", "peaje", "metro"],
     "Compras": ["amazon", "shein", "temu", "tienda", "plaza", "ikea", "walmart", "aliexpress"],
     "Entretenimiento": ["cine", "steam", "playstation", "xbox", "nvidia", "twitch", "bar ", "disco"],
     "Salud": ["farmacia", "clinica", "hospital", "laborator", "medic", "carol"],
-    "Servicios": ["claro", "altice", "edesur", "edeeste", "edenorte", "caasd", "internet", "wind", "viva"],
+    "Servicios": ["hostinger", "mikrowisp", "claro", "altice", "edesur", "edeeste", "edenorte", "caasd", "internet", "wind", "viva"],
     "Suscripciones": ["netflix", "spotify", "youtube", "disney", "hbo", "prime video", "openai", "anthropic", "apple.com", "google"],
     "Educación": ["udemy", "coursera", "universidad", "colegio", "libreria"],
     "Hogar": ["ferreter", "muebl", "hogar", "epa"],

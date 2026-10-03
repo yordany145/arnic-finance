@@ -1,6 +1,6 @@
 import argparse
 import sys
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import budgets, config, ledger, mail_source
@@ -10,7 +10,7 @@ from .state import State
 from .telegram import Telegram
 
 
-def process_mail(mail, cfg, arnic, tg, state, dry_run=False, snapshot=None) -> str:
+def process_mail(mail, cfg, arnic, tg, state, dry_run=False, snapshot=None, quiet_log=None) -> str:
     """Devuelve 'registrado' | 'omitido' | 'error'. Marca el correo como visto para no repetirlo."""
     key = f"mail:{mail.message_id}"
     if state.has(key):
@@ -25,9 +25,11 @@ def process_mail(mail, cfg, arnic, tg, state, dry_run=False, snapshot=None) -> s
         amount = p.amount_minor
         if p.currency == "USD":
             if not cfg.usd_to_local:
-                if not dry_run:
+                if quiet_log is not None:
+                    quiet_log["usd"].append(f"US${amount / 100:,.2f} · {p.merchant}")
+                elif not dry_run:
                     tg.send(f"💳 Consumo en USD de ${amount / 100:,.2f} en {p.merchant}. No lo registré: falta `usd_to_local` en la config.")
-                failed = True
+                failed = quiet_log is None
                 continue
             amount = round(amount * cfg.usd_to_local)
         when = p.when_ms or mail.date_ms
@@ -50,13 +52,34 @@ def process_mail(mail, cfg, arnic, tg, state, dry_run=False, snapshot=None) -> s
             continue
         if snapshot is not None:  # que otra compra igual del mismo correo no se tome por duplicada de ésta
             snapshot["transactions"].append({"type": "expense", "amountMinor": amount, "occurredAt": when, "deletedAt": None})
-        tg.send(f"💳 {budgets.money(amount, cfg.currency_symbol)} · {category}\n{note}" + (f"\n{card['account']}" if card.get("account") else ""))
+        if quiet_log is not None:
+            quiet_log["rows"].append((when, amount, category, card.get("account") or "—", note))
+        else:
+            tg.send(f"💳 {budgets.money(amount, cfg.currency_symbol)} · {category}\n{note}" + (f"\n{card['account']}" if card.get("account") else ""))
         result = "registrado"
     if failed:
         return "error"  # sin marcar: se reintenta (la guarda anti-duplicados evita repetir las que sí entraron)
     if not dry_run:
         state.add(key)
     return result
+
+
+def _backfill_summary(log, cfg) -> str:
+    by_account: dict = {}
+    for _, amount, _, account, _ in log["rows"]:
+        by_account[account] = by_account.get(account, 0) + amount
+    lines = [f"📥 Historial cargado: {len(log['rows'])} consumos"] + [f"  • {a}: {budgets.money(t, cfg.currency_symbol)}" for a, t in sorted(by_account.items())]
+    if log["usd"]:
+        lines += [f"⚠️ {len(log['usd'])} en USD sin registrar (falta usd_to_local):"] + [f"  • {u}" for u in log["usd"]]
+    return "\n".join(lines)
+
+
+def _print_backfill(log, cfg) -> None:
+    tz = ZoneInfo(cfg.timezone)
+    for when, amount, category, account, note in sorted(log["rows"]):
+        print(f"{datetime.fromtimestamp(when / 1000, tz):%d/%m %H:%M} | {budgets.money(amount, cfg.currency_symbol):>12} | {category:<15} | {account:<20} | {note}")
+    for u in log["usd"]:
+        print(f"SIN REGISTRAR (USD): {u}")
 
 
 def check_alerts(cfg, arnic, tg, state) -> int:
@@ -76,6 +99,9 @@ def main(argv=None):
     ing = sub.add_parser("ingest", help="lee el correo del banco, registra gastos y avisa si se cruza un presupuesto")
     ing.add_argument("--dry-run", action="store_true", help="muestra lo que haría sin registrar ni avisar")
     ing.add_argument("--file", help="probar con un .eml guardado en vez de leer el correo")
+    ing.add_argument("--since", type=date.fromisoformat, help="cargar historial desde esta fecha (AAAA-MM-DD)")
+    ing.add_argument("--until", type=date.fromisoformat, help="hasta esta fecha, inclusive (por defecto, hoy)")
+    ing.add_argument("--quiet", action="store_true", help="sin un aviso por compra: manda un solo resumen por Telegram")
     rep = sub.add_parser("report", help="manda un reporte por Telegram")
     rep.add_argument("period", choices=["daily", "weekly"])
     acc = sub.add_parser("add-account", help="crea una cuenta con su saldo inicial (como ingreso)")
@@ -95,13 +121,21 @@ def main(argv=None):
     if args.cmd == "ingest":
         if args.file:
             mails = [mail_source.from_bytes(open(args.file, "rb").read())]
+        elif args.since:
+            before = (args.until + timedelta(days=1)) if args.until else None
+            mails = mail_source.fetch_range(cfg.imap_host, cfg.imap_user, cfg.imap_password, cfg.imap_folder, cfg.bank_senders, args.since, before)
         else:
             mails = mail_source.fetch_recent(cfg.imap_host, cfg.imap_user, cfg.imap_password, cfg.imap_folder, cfg.bank_senders, cfg.lookback_days)
         counts = {"registrado": 0, "omitido": 0, "error": 0}
         snapshot = arnic.snapshot()
+        quiet_log = {"rows": [], "usd": []} if args.quiet else None
         for m in mails:
-            counts[process_mail(m, cfg, arnic, tg, state, args.dry_run, snapshot)] += 1
-        if counts["registrado"] and not args.dry_run:
+            counts[process_mail(m, cfg, arnic, tg, state, args.dry_run, snapshot, quiet_log)] += 1
+        if quiet_log is not None:
+            _print_backfill(quiet_log, cfg)
+            if not args.dry_run and (quiet_log["rows"] or quiet_log["usd"]):
+                tg.send(_backfill_summary(quiet_log, cfg))
+        if counts["registrado"] and not args.dry_run and not args.since:
             check_alerts(cfg, arnic, tg, state)
         print(counts)
         return 1 if counts["error"] else 0

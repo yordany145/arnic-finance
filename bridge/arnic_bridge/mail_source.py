@@ -5,7 +5,7 @@ import html
 import imaplib
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 
 @dataclass
@@ -40,18 +40,22 @@ def from_bytes(raw: bytes) -> Mail:
     )
 
 
-def fetch_recent(host: str, user: str, password: str, folder: str, senders: list, days: int):
-    """Lee sin marcar como leído (BODY.PEEK). Sólo correos de los remitentes del banco."""
-    since = (datetime.now() - timedelta(days=days)).strftime("%d-%b-%Y")
+def fetch_range(host: str, user: str, password: str, folder: str, senders: list, since: date, before: date | None = None):
+    """Lee sin marcar como leído (BODY.PEEK). Solo correos de los remitentes del banco, desde `since` hasta antes de `before`."""
+    criteria = ["SINCE", since.strftime("%d-%b-%Y")] + (["BEFORE", before.strftime("%d-%b-%Y")] if before else [])
     with imaplib.IMAP4_SSL(host) as imap:
         imap.login(user, password)
         imap.select(folder, readonly=True)
         ids = set()
         for s in senders:
-            typ, data = imap.search(None, "SINCE", since, "FROM", f'"{s}"')
+            typ, data = imap.search(None, *criteria, "FROM", f'"{s}"')
             if typ == "OK":
                 ids.update(data[0].split())
         for i in sorted(ids, key=int):
             typ, data = imap.fetch(i, "(BODY.PEEK[])")
             if typ == "OK" and data and isinstance(data[0], tuple):
                 yield from_bytes(data[0][1])
+
+
+def fetch_recent(host: str, user: str, password: str, folder: str, senders: list, days: int):
+    return fetch_range(host, user, password, folder, senders, (datetime.now() - timedelta(days=days)).date())

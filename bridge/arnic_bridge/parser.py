@@ -98,22 +98,32 @@ def categorize(merchant: str, rules: dict, fallback: str) -> str:
     return fallback
 
 
-_BHD_ROW = re.compile(
-    r"\|\s*(\d{2})/(\d{2})/(\d{4})\s+(\d{1,2}):(\d{2})\s*([ap]m)\s*\|\s*([A-Za-z]{2,3})\s*\|\s*\$?\s*([\d.,]+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|", re.I)
+_BHD_DATE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})\s+(\d{1,2}):(\d{2})\s*([ap]m)$", re.I)
 _BHD_CARD = re.compile(r"Tarjeta[^#\n]*#\s*(\d{4})", re.I)
 
 
 def parse_bhd(body: str) -> list:
-    """Filas de 'Detalle de Transacciones' de BHD. Solo compras aprobadas; el resto (retiros, pagos, reversos) se ignora."""
+    """Filas de 'Detalle de Transacciones' de BHD. Solo compras aprobadas; el resto (retiros, pagos, reversos) se ignora.
+
+    La tabla llega de dos maneras según de dónde se lea el correo: con barras ('| celda | celda |') o, en el HTML
+    real, con cada celda en su propia línea. Se aplanan ambas a una lista de celdas y se buscan filas de 6:
+    fecha, moneda, monto, comercio, estado, tipo."""
     from datetime import datetime, timedelta, timezone
     card = _BHD_CARD.search(body)
+    cells = [c.strip() for c in re.split(r"[|\n]", body) if c.strip()]
     out = []
-    for d, mo, y, hh, mi, ap, cur, amount, merchant, estado, tipo in _BHD_ROW.findall(body):
-        if not re.search(r"aprobad", estado, re.I) or not re.fullmatch(r"compra|consumo", tipo.strip(), re.I):
+    for k, cell in enumerate(cells):
+        m = _BHD_DATE.match(cell)
+        if not m or k + 5 >= len(cells):
             continue
-        minor = parse_amount(amount)
+        cur, amount, merchant, estado, tipo = cells[k + 1 : k + 6]
+        if not re.search(r"aprobad", estado, re.I) or not re.fullmatch(r"compra|consumo", tipo, re.I) or not re.fullmatch(r"[A-Za-z]{2,3}", cur):
+            continue
+        digits = re.search(r"[\d.,]*\d", amount)
+        minor = parse_amount(digits.group(0)) if digits else 0
         if minor <= 0:
             continue
+        d, mo, y, hh, mi, ap = m.groups()
         hour = int(hh) % 12 + (12 if ap.lower() == "pm" else 0)
         local = datetime(int(y), int(mo), int(d), hour, int(mi), tzinfo=timezone(timedelta(hours=-4)))  # hora de República Dominicana
         out.append(Purchase(minor, "USD" if cur.upper().startswith("US") else "LOCAL", re.sub(r"\s+", " ", merchant).strip(),

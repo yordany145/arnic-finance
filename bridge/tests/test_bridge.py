@@ -66,6 +66,16 @@ class Cards(unittest.TestCase):
         self.assertEqual((p.amount_minor, p.currency, p.merchant, p.card_last4, p.bank), (399000, "LOCAL", "CCC CIBAO ECOMM", "0000", "bhd"))
         self.assertEqual(datetime.fromtimestamp(p.when_ms / 1000, ZoneInfo("America/Santo_Domingo")), datetime(2026, 9, 21, 14, 12, tzinfo=ZoneInfo("America/Santo_Domingo")))
 
+    def test_bhd_html_layout(self):
+        """El correo real (HTML) deja cada celda en su propia línea, sin barras."""
+        html = ("BHD Notificación de Transacciones Mastercard Local # 1111 Te notificamos la transacción realizada con tu Tarjeta Mastercard Local # 1111 \n"
+                "Detalle de Transacciones \n \n Fecha \n \n Moneda \n \n Monto \n \n Comercio \n \n Estado \n \n Tipo \n \n"
+                " 20/09/2026 12:14 pm \n \n RD \n \n $2,000.00 \n \n ECO PETROLEO ALMONTE L \n \n Aprobada \n \n Compra \n \n"
+                " 20/09/2026 12:20 pm \n \n RD \n \n $50.00 \n \n OTRO COMERCIO \n \n Rechazada \n \n Compra \n \n Ahora, tus Tarjetas BHD")
+        (p,) = parse_email("alertas@bhd.com.do", "BHD Notificación de Transacciones", html)
+        self.assertEqual((p.amount_minor, p.merchant, p.card_last4), (200000, "ECO PETROLEO ALMONTE L", "1111"))
+        self.assertEqual(categorize(p.merchant, DEFAULT_CATEGORY_RULES, "Otros"), "Combustible")
+
     def test_bhd_ignores_non_purchases(self):
         for tipo, estado in (("Retiro", "Aprobada"), ("Compra", "Rechazada"), ("Pago", "Aprobada")):
             with self.assertRaises(NotAPurchase):
