@@ -21,13 +21,13 @@ class NotAPurchase(Exception):
 
 
 _SKIP = re.compile(r"rechaz|declinad|denegad|reverso|reversad|devoluci|reembolso|cancelad", re.I)
-_BUY = re.compile(r"compra|consumo|cargo|pago|retiro|transacci|uso de (?:su )?tarjeta", re.I)
+_BUY = re.compile(r"presenta un consumo|notificaci[oó]n de consumo|\bconsumo\b|\bcompra\b", re.I)
 _AMOUNT = re.compile(r"(RD\s?\$|US\s?\$|USD|DOP|\$)\s?(\d[\d.,]*\d|\d)", re.I)
 _MERCHANT = [
-    re.compile(r"(?:comercio|establecimiento|merchant)\s*[:\-]\s*(.+?)(?:\r?\n|\s{2,}|$)", re.I),
+    re.compile(r"(?:comercio|establecimiento|merchant)\s*:\s*\n?\s*([^\n]+)", re.I),
     re.compile(r"\b(?:en|at)\s+([A-Z0-9][^\n.,;]{2,50}?)(?=\s+(?:con|el|a las|con su|using|on)\b|[.,;\n]|$)"),
 ]
-_CARD = re.compile(r"(?:terminad[ao]\s+en|termina\s+en|ending\s+(?:in|with)|\*{2,}|x{2,})\s*(\d{4})", re.I)
+_CARD = re.compile(r"(?:terminad[ao]\s+en|termina\s+en|ending\s+(?:in|with)|\*{2,}|•{2,}|x{2,})\s*(\d{4})", re.I)
 
 
 def parse_amount(text: str) -> int:
@@ -52,13 +52,24 @@ def _strip_accents(s: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
 
+def _flatten(body: str) -> str:
+    """Los correos del banco son tablas ('| Comercio: |' / '| VALOR |'): quita las barras y las líneas vacías."""
+    lines = (re.sub(r"\s+", " ", ln.replace("|", " ")).strip() for ln in body.splitlines())
+    return "\n".join(ln for ln in lines if ln)
+
+
 def parse_purchase(subject: str, body: str) -> Purchase:
+    body = _flatten(body)
     text = f"{subject}\n{body}"
+    estado = re.search(r"estado\s*:\s*\n?\s*([^\n]+)", body, re.I)
+    if estado and not re.search(r"aprobad", estado.group(1), re.I):
+        raise NotAPurchase(f"estado {estado.group(1).strip()}")
     if _SKIP.search(text):
         raise NotAPurchase("rechazo, reverso o devolución")
     if not _BUY.search(text):
         raise NotAPurchase("no parece un consumo")
-    m = _AMOUNT.search(text)
+    after_monto = re.search(r"monto\s*:", text, re.I)
+    m = (_AMOUNT.search(text, after_monto.end()) if after_monto else None) or _AMOUNT.search(text)
     if not m:
         raise NotAPurchase("sin monto")
     sym = re.sub(r"\s", "", m.group(1)).upper()
@@ -72,6 +83,7 @@ def parse_purchase(subject: str, body: str) -> Purchase:
         if mm:
             merchant = re.sub(r"\s+", " ", mm.group(1)).strip(" -:*")
             break
+    merchant = re.split(r"\s+(?:Fecha de transacci)", merchant)[0].strip()
     card = _CARD.search(text)
     return Purchase(amount, currency, merchant or "Comercio desconocido", card.group(1) if card else None)
 

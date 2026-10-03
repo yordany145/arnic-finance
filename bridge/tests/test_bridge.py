@@ -22,6 +22,23 @@ class Parser(unittest.TestCase):
         p = parse_purchase("Notificación de consumo", "Se realizó una compra por RD$1,250.00 en SUPERMERCADO NACIONAL con su tarjeta terminada en 4321 el 03/10/2026.")
         self.assertEqual((p.amount_minor, p.currency, p.merchant, p.card_last4), (125000, "LOCAL", "SUPERMERCADO NACIONAL", "4321"))
 
+    BANRESERVAS = (" Notificación de Consumo - Banreservas\n\n| |\n| Notificación de Consumo |\n| Su tarjeta MCS-MULTIMONEDA ••0000 presenta un consumo. |\n\n"
+                   "| Monto: |\n| DOP 4,900.00 |\n\n| Estado: |\n| APROBADO |\n\n| Comercio: |\n| ECOPETROLEO LA VEGA LA VEGA DOM |\n\n"
+                   "| Fecha de transacción: |\n| 02/10/2026 06:51 PM |\n\n| Número de aprobación: |\n| 524225 |\n")
+
+    def test_banreservas_real_format(self):
+        p = parse_purchase("Notificaciones Banreservas", self.BANRESERVAS)
+        self.assertEqual((p.amount_minor, p.currency, p.merchant, p.card_last4), (490000, "LOCAL", "ECOPETROLEO LA VEGA LA VEGA DOM", "0000"))
+        self.assertEqual(categorize(p.merchant, DEFAULT_CATEGORY_RULES, "Otros"), "Combustible")
+
+    def test_banreservas_not_approved_and_transfers(self):
+        with self.assertRaises(NotAPurchase):
+            parse_purchase("x", self.BANRESERVAS.replace("APROBADO", "DECLINADA"))
+        with self.assertRaises(NotAPurchase):  # transferencias y pagos no son consumos
+            parse_purchase("Recibo de la transacción", "¡Transacción realizada! Monto: DOP 24000.00 Transacción: Transferencia a Tercero")
+        with self.assertRaises(NotAPurchase):
+            parse_purchase("Recibo de la transacción", "¡Pago realizado! Monto: DOP 699.00 Transacción: Pago de Tarjeta de Crédito Propio")
+
     def test_usd(self):
         p = parse_purchase("Consumo", "Compra por US$12.99 en NETFLIX.COM terminada en 1111.")
         self.assertEqual((p.amount_minor, p.currency), (1299, "USD"))
@@ -98,6 +115,14 @@ class Ledger(unittest.TestCase):
         snap = {**self.SNAP, "accounts": self.SNAP["accounts"] + rows["accounts"], "transactions": self.SNAP["transactions"] + rows["transactions"]}
         again, _ = ledger.plan_account(snap, "qik AHORROS", "savings", 3700000)
         self.assertEqual((again["accounts"], again["transactions"]), ([], []))
+
+    def test_duplicate_guard(self):
+        snap = {"transactions": [{"type": "expense", "amountMinor": 490000, "occurredAt": 1_000_000, "deletedAt": None}]}
+        self.assertTrue(ledger.is_duplicate(snap, 490000, 1_000_000 + 60_000))
+        self.assertFalse(ledger.is_duplicate(snap, 490000, 1_000_000 + 3_600_000))
+        self.assertFalse(ledger.is_duplicate(snap, 100, 1_000_000))
+        snap["transactions"][0]["deletedAt"] = 5
+        self.assertFalse(ledger.is_duplicate(snap, 490000, 1_000_000))
 
     def test_delete_matches_only_notes(self):
         rows, hits = ledger.plan_delete(self.SNAP, ["prueba"], now=9)

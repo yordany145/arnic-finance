@@ -10,7 +10,7 @@ from .state import State
 from .telegram import Telegram
 
 
-def process_mail(mail, cfg, arnic, tg, state, dry_run=False) -> str:
+def process_mail(mail, cfg, arnic, tg, state, dry_run=False, snapshot=None) -> str:
     """Devuelve 'registrado' | 'omitido' | 'error'. Marca el correo como visto para no repetirlo."""
     key = f"mail:{mail.message_id}"
     if state.has(key):
@@ -29,6 +29,10 @@ def process_mail(mail, cfg, arnic, tg, state, dry_run=False) -> str:
             return "error"
         amount = round(amount * cfg.usd_to_local)
     category = categorize(p.merchant, cfg.category_rules, cfg.fallback_category)
+    if snapshot is not None and ledger.is_duplicate(snapshot, amount, mail.date_ms):
+        if not dry_run:
+            state.add(key)  # ya estaba registrado: no repetirlo
+        return "omitido"
     note = p.merchant + (f" (tarjeta ••{p.card_last4})" if p.card_last4 else "")
     if dry_run:
         print(f"[dry-run] {budgets.money(amount, cfg.currency_symbol)} | {category} | {note}")
@@ -81,8 +85,9 @@ def main(argv=None):
         else:
             mails = mail_source.fetch_recent(cfg.imap_host, cfg.imap_user, cfg.imap_password, cfg.imap_folder, cfg.bank_senders, cfg.lookback_days)
         counts = {"registrado": 0, "omitido": 0, "error": 0}
+        snapshot = arnic.snapshot()
         for m in mails:
-            counts[process_mail(m, cfg, arnic, tg, state, args.dry_run)] += 1
+            counts[process_mail(m, cfg, arnic, tg, state, args.dry_run, snapshot)] += 1
         if counts["registrado"] and not args.dry_run:
             check_alerts(cfg, arnic, tg, state)
         print(counts)

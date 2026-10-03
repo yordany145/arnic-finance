@@ -39,3 +39,10 @@ def plan_delete(snapshot: dict, needles: list, now: int | None = None):
     keys = [n.lower() for n in needles]
     hits = [t for t in snapshot["transactions"] if not t.get("deletedAt") and any(k in (t.get("note") or "").lower() for k in keys)]
     return {"transactions": [{**t, "deletedAt": now, "updatedAt": now} for t in hits]}, hits
+
+
+def is_duplicate(snapshot: dict, amount_minor: int, when_ms: int, window_ms: int = 10 * 60 * 1000) -> bool:
+    """¿Ya hay un gasto vivo con el mismo monto a menos de 10 min? Evita registrar dos veces un cargo
+    que se anotó a mano (o por otra vía) antes de que el puente leyera su aviso."""
+    return any(t["type"] == "expense" and not t.get("deletedAt") and t["amountMinor"] == amount_minor and abs(t["occurredAt"] - when_ms) <= window_ms
+               for t in snapshot["transactions"])

@@ -5,7 +5,7 @@ from pathlib import Path
 
 DEFAULT_CATEGORY_RULES = {
     "Comida": ["supermerc", "colmado", "restaur", "pizza", "burger", "kfc", "mcdonald", "cafe", "panader", "sirena", "nacional", "jumbo", "bravo", "ubereats", "pedidosya"],
-    "Combustible": ["gasolin", "combustible", "shell", "texaco", "esso", "sunix", "isla", "total"],
+    "Combustible": ["gasolin", "combustible", "petrol", "ecopetroleo", "shell", "texaco", "esso", "sunix", "isla", "total"],
     "Transporte": ["uber", "indrive", "taxi", "peaje", "metro"],
     "Compras": ["amazon", "shein", "temu", "tienda", "plaza", "ikea", "walmart", "aliexpress"],
     "Entretenimiento": ["cine", "steam", "playstation", "xbox", "nvidia", "twitch", "bar ", "disco"],
