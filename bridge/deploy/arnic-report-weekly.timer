@@ -2,7 +2,9 @@
 Description=Reporte 20:00 semanal (domingo) de Arnic Finance
 
 [Timer]
-OnCalendar=Sun *-*-* 20:00:00
+# Misma razón que el reporte diario: zona horaria explícita para que corra a
+# las 8pm hora RD sin importar en qué zona esté el servidor.
+OnCalendar=Sun *-*-* 20:00:00 America/Santo_Domingo
 Persistent=true
 
 [Install]

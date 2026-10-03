@@ -2,7 +2,9 @@
 Description=Reporte 21:00 diario de Arnic Finance
 
 [Timer]
-OnCalendar=*-*-* 21:00:00
+# Zona horaria explícita: si este timer corre en un servidor en UTC (p.ej. el
+# VPS), sin esto dispararía a las 9pm UTC = 5pm hora RD, no a las 9pm reales.
+OnCalendar=*-*-* 21:00:00 America/Santo_Domingo
 Persistent=true
 
 [Install]
