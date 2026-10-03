@@ -1,0 +1,185 @@
+openapi: 3.0.3
+info:
+  title: Arnic Finance — API de integraciones
+  version: "1.0.0"
+  description: >
+    Registra y consulta gastos/ingresos de un usuario de Arnic Finance.
+    El servidor es un espejo de lo que hay en el teléfono del usuario; éste
+    sincroniza periódicamente, así que los datos pueden tardar unos segundos
+    en reflejarse en ambos sentidos. Nunca inventes una categoría o cuenta:
+    si un nombre no se reconoce, la API devuelve sugerencias — usa una de
+    ellas o pregúntale al usuario cuál quiso decir.
+servers:
+  - url: https://REEMPLAZA-CON-TU-URL.onrender.com
+    description: Reemplaza por la URL real de tu despliegue (ver docs/API.md).
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: La API key generada una vez con POST /v1/setup (ver docs/API.md). No es necesaria para registrar al usuario; ya viene aprovisionada.
+  schemas:
+    Movement:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [expense, income] }
+        amountMinor: { type: integer, description: "Centavos" }
+        category: { type: string }
+        account: { type: string }
+        note: { type: string, nullable: true }
+        occurredAtMs: { type: integer }
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+        suggestions:
+          type: array
+          items: { type: string }
+paths:
+  /v1/movements:
+    post:
+      operationId: registerMovement
+      summary: Registra un gasto o ingreso.
+      description: >
+        Usa esto cuando el usuario te pida registrar algo que gastó o
+        recibió (p. ej. "anota que gasté 500 pesos en comida",
+        "registra un ingreso de 2000 por venta"). Si no te dice la
+        categoría, pregúntale; no la inventes. Si la respuesta es 422,
+        muestra las "suggestions" al usuario y vuelve a intentar con la
+        que elija.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, category]
+              properties:
+                type:
+                  type: string
+                  enum: [expense, income]
+                  description: "expense = gasto, income = ingreso"
+                amount:
+                  type: number
+                  description: "Monto en unidades normales (ej. 500.00). Usa este campo, no amountMinor, salvo que ya tengas el valor en centavos."
+                category:
+                  type: string
+                  description: "Nombre de la categoría tal como lo dijo el usuario (ej. 'Comida', 'Transporte'). También acepta un id exacto."
+                account:
+                  type: string
+                  description: "Opcional. Nombre de la cuenta (ej. 'Efectivo', 'Banco Popular'). Si se omite, usa la cuenta predeterminada del usuario."
+                note:
+                  type: string
+                  description: "Opcional. Una nota corta, p. ej. lo que compró."
+      responses:
+        "201":
+          description: Movimiento creado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Movement" }
+        "400":
+          description: Falta un campo obligatorio o el monto no es válido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: El usuario todavía no sincronizó la app ninguna vez (no hay categorías/cuentas que usar).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: No se reconoce la categoría o cuenta. Mira "suggestions" y reintenta.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    get:
+      operationId: listMovements
+      summary: Lista los movimientos más recientes, opcionalmente filtrados.
+      description: Úsalo cuando el usuario pregunte "¿qué he gastado?", "muéstrame mis últimos movimientos", etc.
+      parameters:
+        - name: type
+          in: query
+          schema: { type: string, enum: [expense, income] }
+        - name: period
+          in: query
+          schema: { type: string, enum: [today, yesterday, week, month, all] }
+          description: Por defecto "all".
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Lista de movimientos (más reciente primero).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Movement" }
+  /v1/summary:
+    get:
+      operationId: getSummary
+      summary: Totales de ingresos/gastos/balance de un período.
+      description: >
+        Usa esto para "¿cuánto he gastado este mes?", "¿cómo va mi
+        balance?", etc.
+      parameters:
+        - name: period
+          in: query
+          schema: { type: string, enum: [today, yesterday, week, month, all] }
+          description: Por defecto "all".
+      responses:
+        "200":
+          description: Resumen del período.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  period: { type: string }
+                  incomeMinor: { type: integer }
+                  expenseMinor: { type: integer }
+                  balanceMinor: { type: integer }
+  /v1/categories:
+    get:
+      operationId: listCategories
+      summary: Lista las categorías reales del usuario.
+      description: Consulta esto si no estás seguro de qué categorías existen antes de registrar un movimiento.
+      parameters:
+        - name: type
+          in: query
+          schema: { type: string, enum: [expense, income] }
+      responses:
+        "200":
+          description: Categorías.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    name: { type: string }
+                    icon: { type: string }
+                    type: { type: string }
+  /v1/accounts:
+    get:
+      operationId: listAccounts
+      summary: Lista las cuentas reales del usuario (Efectivo, Banco, etc.).
+      responses:
+        "200":
+          description: Cuentas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    name: { type: string }
+                    icon: { type: string }
+                    kind: { type: string }
