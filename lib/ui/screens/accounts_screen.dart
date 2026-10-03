@@ -14,12 +14,12 @@ class AccountsScreen extends ConsumerWidget {
   Future<void> _delete(BuildContext context, WidgetRef ref, Account a) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text('¿Eliminar "${a.name}"?'),
         content: const Text('Sus movimientos no se borran: seguirán en el historial.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Eliminar')),
         ],
       ),
     );

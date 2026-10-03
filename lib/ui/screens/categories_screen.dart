@@ -32,12 +32,12 @@ class _CategoryList extends ConsumerWidget {
   Future<void> _delete(BuildContext context, WidgetRef ref, Category c) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text('¿Eliminar "${c.name}"?'),
         content: const Text('Los movimientos que ya registraste con esta categoría no se borran: conservan su nombre en el historial.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Eliminar')),
         ],
       ),
     );

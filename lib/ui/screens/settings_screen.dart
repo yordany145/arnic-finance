@@ -21,24 +21,10 @@ class SettingsScreen extends ConsumerWidget {
     // se cierra mientras el diálogo está abierto.
     final settings = ref.read(settingsRepositoryProvider);
     final quickActions = ref.read(quickActionsProvider);
-    final controller = TextEditingController(text: current);
-    final value = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Símbolo de moneda'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 5,
-          decoration: const InputDecoration(hintText: 'RD\$, US\$, €…'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Guardar')),
-        ],
-      ),
-    );
-    controller.dispose();
+    // `_CurrencyDialog` es un StatefulWidget propio (ver el comentario sobre
+    // `_ConnectDialog` más abajo): dispone su controller cuando el diálogo de
+    // verdad se desmonta, no apenas `showDialog` resuelve.
+    final value = await showDialog<String>(context: context, builder: (_) => _CurrencyDialog(initial: current));
     if (value != null && value.isNotEmpty) {
       await settings.setCurrencySymbol(value);
       quickActions.refreshWidgets();
@@ -69,15 +55,15 @@ class SettingsScreen extends ConsumerWidget {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('¿Restaurar copia de seguridad?'),
         content: const Text(
           'Esto reemplaza TODOS los datos actuales (movimientos, categorías, cuentas y presupuestos) por los del archivo. '
           'No se puede deshacer.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Restaurar')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Restaurar')),
         ],
       ),
     );
@@ -241,46 +227,19 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
     final prefs = container.read(metaSyncPrefsProvider);
     final messenger = ScaffoldMessenger.of(context);
 
-    final urlController = TextEditingController(text: prefs.serverUrl ?? 'https://');
-    final tokenController = TextEditingController();
-    final confirmed = await showDialog<bool>(
+    // `_ConnectDialog` es un StatefulWidget con sus propios controllers
+    // (mismo patrón que _AccountEditor/_BudgetEditor/_CategoryEditor en el
+    // resto de la app): así Flutter los dispone solo cuando el diálogo de
+    // verdad termina de desmontarse. Disponerlos a mano justo después de que
+    // `showDialog` resuelve es demasiado pronto — la animación de salida
+    // todavía está dibujando el TextField en ese momento.
+    final result = await showDialog<(String, String)>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(rotate ? 'Regenerar API key' : 'Conectar con Meta IA'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: urlController,
-              autofocus: true,
-              keyboardType: TextInputType.url,
-              decoration: const InputDecoration(labelText: 'URL del servidor', hintText: 'https://tu-servidor.onrender.com'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: tokenController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Setup token'),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'El setup token lo definiste tú al desplegar el servidor (variable SETUP_TOKEN). No se guarda en la app: sólo sirve para pedir la API key una vez.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Conectar')),
-        ],
-      ),
+      builder: (_) => _ConnectDialog(rotate: rotate, initialUrl: prefs.serverUrl ?? 'https://'),
     );
-    final serverUrl = urlController.text.trim();
-    final setupToken = tokenController.text.trim();
-    urlController.dispose();
-    tokenController.dispose();
-    if (confirmed != true || serverUrl.isEmpty || setupToken.isEmpty) return;
+    if (result == null) return;
+    final (serverUrl, setupToken) = result;
+    if (serverUrl.isEmpty || setupToken.isEmpty) return;
 
     setState(() => _busy = true);
     // Se muestra ANTES de llamar a la red: el plan gratis de Render puede
@@ -354,12 +313,12 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
     final container = ProviderScope.containerOf(context, listen: false);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('¿Desconectar Meta IA?'),
         content: const Text('Se borra la API key guardada en este teléfono. El servidor y lo que ya se sincronizó no se tocan.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Desconectar')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Desconectar')),
         ],
       ),
     );
@@ -435,6 +394,105 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
             onTap: _disconnect,
           ),
         ],
+      ],
+    );
+  }
+}
+
+class _CurrencyDialog extends StatefulWidget {
+  const _CurrencyDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_CurrencyDialog> createState() => _CurrencyDialogState();
+}
+
+class _CurrencyDialogState extends State<_CurrencyDialog> {
+  late final _controller = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Símbolo de moneda'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 5,
+        decoration: const InputDecoration(hintText: 'RD\$, US\$, €…'),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        TextButton(onPressed: () => Navigator.pop(context, _controller.text.trim()), child: const Text('Guardar')),
+      ],
+    );
+  }
+}
+
+/// Contenido del diálogo de "Configurar servidor"/"Regenerar API key". Un
+/// `StatefulWidget` propio (no un `TextEditingController` ad-hoc en el método
+/// de afuera) para que Flutter dispone los controllers en su propio
+/// `dispose()`, cuando el diálogo de verdad se desmonta — no en cuanto
+/// `showDialog` resuelve, que todavía es mitad de la animación de salida.
+class _ConnectDialog extends StatefulWidget {
+  const _ConnectDialog({required this.rotate, required this.initialUrl});
+
+  final bool rotate;
+  final String initialUrl;
+
+  @override
+  State<_ConnectDialog> createState() => _ConnectDialogState();
+}
+
+class _ConnectDialogState extends State<_ConnectDialog> {
+  late final _urlController = TextEditingController(text: widget.initialUrl);
+  final _tokenController = TextEditingController();
+
+  @override
+  void dispose() {
+    _urlController.dispose();
+    _tokenController.dispose();
+    super.dispose();
+  }
+
+  void _submit() => Navigator.pop(context, (_urlController.text.trim(), _tokenController.text.trim()));
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.rotate ? 'Regenerar API key' : 'Conectar con Meta IA'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _urlController,
+            autofocus: true,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(labelText: 'URL del servidor', hintText: 'https://tu-servidor.onrender.com'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _tokenController,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Setup token'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'El setup token lo definiste tú al desplegar el servidor (variable SETUP_TOKEN). No se guarda en la app: sólo sirve para pedir la API key una vez.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(onPressed: _submit, child: const Text('Conectar')),
       ],
     );
   }
