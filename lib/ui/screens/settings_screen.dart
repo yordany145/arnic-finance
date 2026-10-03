@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../data/backup_service.dart';
 import '../../data/meta_sync_client.dart';
 import '../../state/providers.dart';
+import '../widgets/update_tile.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -191,6 +192,14 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: const Text('Reemplaza todos los datos actuales por los de la copia'),
             onTap: () => _importBackup(context, ref),
           ),
+          if (Platform.isAndroid) ...[
+            const Divider(height: 32),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Text('ACTUALIZACIONES', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant)),
+            ),
+            const UpdateTile(),
+          ],
           const Divider(height: 32),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),

@@ -12,6 +12,7 @@ import '../data/repositories/drift_budget_repository.dart';
 import '../data/repositories/drift_category_repository.dart';
 import '../data/repositories/drift_movement_repository.dart';
 import '../data/repositories/drift_settings_repository.dart';
+import '../data/update_service.dart';
 import '../domain/budget.dart';
 import '../domain/budget_alert_service.dart';
 import '../domain/date_range.dart';
@@ -57,6 +58,12 @@ final appLockSupportedProvider = FutureProvider<bool>((ref) => ref.watch(appLock
 /// Se crea y se carga (`load()`) en main.dart: leer del Keystore es asíncrono.
 final metaSyncPrefsProvider =
     Provider<MetaSyncPrefs>((ref) => throw UnimplementedError('metaSyncPrefsProvider no inicializado'));
+
+final updateServiceProvider = Provider<UpdateService>((ref) {
+  final service = UpdateService();
+  ref.onDispose(service.close);
+  return service;
+});
 
 final metaSyncClientProvider = Provider<MetaSyncClient>((ref) {
   final client = MetaSyncClient();

@@ -1,12 +1,13 @@
 name: arnic_finance
 description: "Arnic Finance: finanzas personales con registro ultrarrápido."
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ^3.13.4
 
 dependencies:
+  crypto: ^3.0.7
   drift: ^2.35.0
   drift_flutter: ^0.3.1
   file_picker: ^13.1.0
@@ -21,6 +22,8 @@ dependencies:
   http: ^1.6.0
   intl: ^0.20.3
   local_auth: ^3.0.2
+  open_filex: ^4.7.0
+  package_info_plus: ^10.2.2
   path: ^1.9.1
   path_provider: ^2.1.6
   path_provider_foundation: ^2.6.0
