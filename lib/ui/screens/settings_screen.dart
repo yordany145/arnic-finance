@@ -283,17 +283,38 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
     if (confirmed != true || serverUrl.isEmpty || setupToken.isEmpty) return;
 
     setState(() => _busy = true);
+    // Se muestra ANTES de llamar a la red: el plan gratis de Render puede
+    // tardar hasta un minuto en "despertar", y sin este aviso esa espera se
+    // ve igual que la app congelada (el indicador de progreso de abajo ayuda,
+    // pero un mensaje explícito evita la confusión).
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Conectando… puede tardar hasta un minuto si el servidor estaba dormido.'), duration: Duration(seconds: 65)),
+    );
     try {
       final apiKey = await container.read(metaSyncClientProvider).setup(serverUrl: serverUrl, setupToken: setupToken, rotate: rotate);
       await prefs.setCredentials(serverUrl: serverUrl, apiKey: apiKey);
       container.read(metaSyncEnabledProvider.notifier).set(true);
-      messenger.showSnackBar(const SnackBar(content: Text('Conectado. Sincronizando…')));
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Conectado. Sincronizando…')));
       await container.read(metaSyncServiceProvider).syncNow();
-      if (mounted) messenger.showSnackBar(const SnackBar(content: Text('Listo: ya puedes usar tu conector de Meta IA.')));
+      if (mounted) {
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('Listo: ya puedes usar tu conector de Meta IA.')));
+      }
     } on MetaSyncException catch (e) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) {
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(e.message), duration: const Duration(seconds: 6)));
+      }
     } catch (e) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text('No se pudo conectar: $e')));
+      if (mounted) {
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text('No se pudo conectar: $e'), duration: const Duration(seconds: 6)));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -302,13 +323,28 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
   Future<void> _runSync(Future<void> Function() action, {required String successMessage}) async {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Sincronizando… puede tardar hasta un minuto si el servidor estaba dormido.'), duration: Duration(seconds: 65)),
+    );
     try {
       await action();
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text(successMessage)));
+      if (mounted) {
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(successMessage)));
+      }
     } on MetaSyncException catch (e) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) {
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(e.message), duration: const Duration(seconds: 6)));
+      }
     } catch (e) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text('No se pudo completar: $e')));
+      if (mounted) {
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text('No se pudo completar: $e'), duration: const Duration(seconds: 6)));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -343,6 +379,10 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
 
     return Column(
       children: [
+        // Visible siempre que haya una operación de red en curso: sin esto,
+        // la espera de hasta un minuto (servidor "dormido" del plan gratis de
+        // Render) no da ninguna señal de que algo sigue pasando.
+        if (_busy) const LinearProgressIndicator(),
         SwitchListTile(
           secondary: const Icon(Icons.hub_outlined),
           title: const Text('Conectar con Meta IA'),
