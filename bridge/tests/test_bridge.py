@@ -5,7 +5,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from arnic_bridge import budgets, mail_source
+from arnic_bridge import budgets, ledger, mail_source
 from arnic_bridge.config import DEFAULT_CATEGORY_RULES
 from arnic_bridge.parser import NotAPurchase, categorize, parse_amount, parse_purchase
 
@@ -79,6 +79,30 @@ class Mail(unittest.TestCase):
         self.assertEqual((m.sender, m.message_id), ("avisos@banco.test", "<a@b>"))
         self.assertIn("RD$100.00", m.body)
         self.assertEqual(parse_purchase(m.subject, m.body).merchant, "CINE")
+
+
+class Ledger(unittest.TestCase):
+    SNAP = {"accounts": [{"id": "acc_cash", "name": "Efectivo", "kind": "cash", "sortOrder": 0}],
+            "categories": [{"id": "inc_other", "name": "Otros", "type": "income"}],
+            "transactions": [{"id": "t1", "type": "expense", "amountMinor": 100, "note": "PRUEBA puente", "accountId": "acc_cash"},
+                             {"id": "t2", "type": "expense", "amountMinor": 5, "note": "Cine", "accountId": "acc_cash"}]}
+
+    def test_account_with_opening_balance(self):
+        rows, _ = ledger.plan_account(self.SNAP, "Qik ahorros", "savings", 3700000, now=5)
+        self.assertEqual(rows["accounts"][0]["kind"], "savings")
+        self.assertEqual((rows["transactions"][0]["type"], rows["transactions"][0]["amountMinor"]), ("income", 3700000))
+        self.assertEqual(rows["transactions"][0]["accountId"], rows["accounts"][0]["id"])
+
+    def test_idempotent(self):
+        rows, _ = ledger.plan_account(self.SNAP, "Qik ahorros", "savings", 3700000, now=5)
+        snap = {**self.SNAP, "accounts": self.SNAP["accounts"] + rows["accounts"], "transactions": self.SNAP["transactions"] + rows["transactions"]}
+        again, _ = ledger.plan_account(snap, "qik AHORROS", "savings", 3700000)
+        self.assertEqual((again["accounts"], again["transactions"]), ([], []))
+
+    def test_delete_matches_only_notes(self):
+        rows, hits = ledger.plan_delete(self.SNAP, ["prueba"], now=9)
+        self.assertEqual([t["id"] for t in hits], ["t1"])
+        self.assertEqual(rows["transactions"][0]["deletedAt"], 9)
 
 
 if __name__ == "__main__":

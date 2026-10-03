@@ -3,7 +3,7 @@ import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from . import budgets, config, mail_source
+from . import budgets, config, ledger, mail_source
 from .client import Arnic, ApiError
 from .parser import NotAPurchase, categorize, parse_purchase
 from .state import State
@@ -61,6 +61,14 @@ def main(argv=None):
     ing.add_argument("--file", help="probar con un .eml guardado en vez de leer el correo")
     rep = sub.add_parser("report", help="manda un reporte por Telegram")
     rep.add_argument("period", choices=["daily", "weekly"])
+    acc = sub.add_parser("add-account", help="crea una cuenta con su saldo inicial (como ingreso)")
+    acc.add_argument("name")
+    acc.add_argument("--kind", default="savings", choices=sorted(ledger.ICONS))
+    acc.add_argument("--balance", type=float, default=0, help="saldo actual en unidades, ej. 37000")
+    acc.add_argument("--dry-run", action="store_true")
+    dele = sub.add_parser("delete-movements", help="borra movimientos cuya nota contenga el texto")
+    dele.add_argument("--note-contains", action="append", required=True)
+    dele.add_argument("--dry-run", action="store_true")
     sub.add_parser("check", help="verifica que la configuración y las conexiones funcionan")
     args = ap.parse_args(argv)
 
@@ -83,6 +91,20 @@ def main(argv=None):
         now = datetime.now(ZoneInfo(cfg.timezone))
         days, label = (1, "diario") if args.period == "daily" else (7, "semanal")
         tg.send(budgets.report(arnic.snapshot(), now, cfg.currency_symbol, days, label))
+        return 0
+    if args.cmd == "add-account":
+        rows, text = ledger.plan_account(arnic.snapshot(), args.name, args.kind, round(args.balance * 100))
+        print(("[dry-run] " if args.dry_run else "") + text)
+        if not args.dry_run and (rows["accounts"] or rows["transactions"]):
+            arnic.push(rows)
+        return 0
+    if args.cmd == "delete-movements":
+        rows, hits = ledger.plan_delete(arnic.snapshot(), args.note_contains)
+        for t in hits:
+            print(("[dry-run] " if args.dry_run else "") + f"borrar {budgets.money(t['amountMinor'], cfg.currency_symbol)} · {t.get('note')}")
+        if not args.dry_run and hits:
+            arnic.push(rows)
+        print(f"{len(hits)} movimiento(s)")
         return 0
     if args.cmd == "check":
         snap = arnic.snapshot()

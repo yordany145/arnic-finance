@@ -45,3 +45,7 @@ class Arnic:
 
     def snapshot(self) -> dict:
         return self._call("GET", "/v1/sync?since=0")
+
+    def push(self, rows: dict) -> dict:
+        """POST /v1/sync: el mismo canal que usa el teléfono. El teléfono lo recibe en su próxima sincronización."""
+        return self._call("POST", "/v1/sync", rows)
