@@ -1,0 +1,9 @@
+[Unit]
+Description=Reporte 00:00:semanal de Arnic Finance
+
+[Timer]
+OnCalendar=Sun *-*-* 20
+Persistent=true
+
+[Install]
+WantedBy=timers.target

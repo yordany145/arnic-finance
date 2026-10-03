@@ -1,0 +1,12 @@
+{
+  "server_url": "https://arnic-finance-api.onrender.com",
+  "api_key": "",
+  "imap_user": "tu-correo@gmail.com",
+  "imap_password": "contraseña de aplicación de 16 letras",
+  "bank_senders": ["notificaciones@tubanco.com"],
+  "card_account": "",
+  "timezone": "America/Santo_Domingo",
+  "currency_symbol": "RD$",
+  "usd_to_local": null,
+  "category_rules": {"Comida": ["mi-restaurante-favorito"]}
+}
