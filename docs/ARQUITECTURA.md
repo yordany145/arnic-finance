@@ -24,10 +24,10 @@ ios/ArnicQuick/            Swift sin compilar (intents, controles, widget)
 - **SQLite con drift**: tipado, streams reactivos, migraciones (`schemaVersion`), y el archivo es legible desde Kotlin/Swift.
 - **Dinero en enteros** (`amount_minor`), nunca `double`.
 - **Emojis como iconos** de categorías/cuentas: idénticos en Flutter, Kotlin y Swift sin mapear nombres.
-- **Sincronización futura**: ids UUID, `updated_at`, borrado lógico (`deleted_at`), acceso vía interfaces
-  (`domain/repositories.dart`). Bastará una implementación remota/decorador y un proveedor distinto en `state/providers.dart`.
-  Cuentas de usuario: añadir `user_id` en una migración.
-- **Privacidad**: todo local; el manifest de release no pide `INTERNET`. Cualquier envío futuro debe ser opt-in.
+- **Sincronización** (ya implementada, opcional): ids UUID, `updated_at`, borrado lógico (`deleted_at`) — se
+  pensaron desde el principio para esto. Ver "Integración externa" más abajo.
+- **Privacidad**: todo local por defecto; el manifest de release no pide `INTERNET`. El envío de datos al
+  servidor opcional es opt-in explícito (Ajustes > Integraciones, apagado por defecto).
 - **Contrato con lo nativo**: `lib/data/tables.dart` ↔ `QuickDb.kt` / `QuickDb.swift`. Al cambiar el esquema:
   subir `AppDatabase.kSchemaVersion`, actualizar ambos `SUPPORTED_SCHEMA`, y añadir migración.
   Los nativos se niegan a escribir si la versión no coincide (nunca corrompen datos).
@@ -52,3 +52,44 @@ ios/ArnicQuick/            Swift sin compilar (intents, controles, widget)
   resto de iOS), llamado desde `RecordMovementIntent.perform()`.
 - Al subir el esquema: además de `QuickDb.SUPPORTED_SCHEMA`/`supportedSchema`, revisa si el nuevo dato
   também lo necesita `BudgetAlertChecker` en los tres lenguajes.
+
+## Bloqueo de la app
+
+`platform/app_lock.dart` (`local_auth`, biometría o PIN/patrón del sistema) + `data/app_lock_prefs.dart`
+(preferencia en `shared_preferences`, no en `app_settings` de drift: es sólo de este dispositivo). Android
+exige `FlutterFragmentActivity` en vez de `FlutterActivity` (ver `MainActivity.kt`) y un `LaunchTheme` con
+padre `Theme.AppCompat` (ver `android/app/src/main/res/values*/styles.xml`).
+
+## Asistente (`domain/assistant/`)
+
+Motor de intención + slots en español (no un LLM): `text_normalize.dart` (typos vía Levenshtein con
+transposición), `period_parser.dart`, `amount_parser.dart`, `intent_parser.dart` (clasifica, con reglas
+ordenadas por especificidad — ver sus propios comentarios antes de reordenar nada) y `assistant_engine.dart`
+(responde consultando los mismos repositorios que el resto de la app). Hallazgo central: una alerta
+personalizada pedida en el chat ("avísame si gasto más de X en Y") se implementa creando/actualizando un
+`Budget` real vía `BudgetRepository`, no un motor de reglas paralelo.
+
+## Respaldo (`data/backup_service.dart`)
+
+Exporta/restaura cuentas, categorías, movimientos, presupuestos y ajustes como un único JSON, usando los
+`toJson()`/`fromJson()` que drift ya genera por tabla. Restaurar reemplaza todo (no combina) dentro de una
+transacción, respetando el orden de claves foráneas al borrar e insertar.
+
+## Integración externa (`server/`, opcional)
+
+Paquete Dart aparte (sin Flutter) con su propia copia documentada del esquema (`server/lib/db/tables.dart`,
+mismo contrato que `lib/data/tables.dart`/Kotlin/Swift: no cambiar un lado sin el otro). Expone una API HTTP
+(`docs/API.md`) para que un servicio externo (p. ej. un conector de Meta IA) registre o lea movimientos.
+
+- **Por qué un servidor aparte y no una librería compartida**: el paquete principal depende de Flutter; un
+  paquete Dart puro no puede importarlo sin arrastrar el SDK de Flutter a un servidor. Se optó por el mismo
+  patrón de "contrato documentado, código duplicado a propósito" que ya usan `QuickDb.kt`/`QuickDb.swift`.
+- **Un solo teléfono por cuenta**: la sincronización (`GET`/`POST /v1/sync`, `data/meta_sync_service.dart`
+  del lado Flutter) compara `updated_at` contra el último cursor — no hay que resolver conflictos entre
+  varios dispositivos porque, a propósito, no los hay.
+- **Auth**: una API key de 256 bits por cuenta (su hash SHA-256 es lo único que se guarda), aprovisionada
+  una vez con `POST /v1/setup` protegido por `SETUP_TOKEN` (variable de entorno, nunca viaja a la app salvo
+  en ese primer intercambio).
+- **Apagado por defecto**: `MetaSyncPrefs.enabled` controla si `syncWithMetaIfEnabled` (en `state/providers.dart`,
+  llamado junto a `checkBudgetAlerts` en los mismos puntos) hace algo o no. Mientras esté en `false`, la app
+  no hace ninguna llamada de red — la promesa de "100% local" se mantiene literalmente.

@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../data/backup_service.dart';
+import '../../data/meta_sync_client.dart';
 import '../../state/providers.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -204,13 +205,193 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => _importBackup(context, ref),
           ),
           const Divider(height: 32),
-          const ListTile(
-            leading: Icon(Icons.lock_outline),
-            title: Text('Privacidad'),
-            subtitle: Text('Tus datos financieros se guardan sólo en este dispositivo. La app no se conecta a ningún servidor.'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Text('INTEGRACIONES', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant)),
+          ),
+          const _MetaSyncSection(),
+          const Divider(height: 32),
+          ListTile(
+            leading: const Icon(Icons.lock_outline),
+            title: const Text('Privacidad'),
+            subtitle: Text(
+              ref.watch(metaSyncEnabledProvider)
+                  ? 'Tus datos se guardan en este dispositivo. Activaste "Conectar con Meta IA": tus movimientos y categorías también se envían al servidor que configuraste.'
+                  : 'Tus datos financieros se guardan sólo en este dispositivo. La app no se conecta a ningún servidor.',
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MetaSyncSection extends ConsumerStatefulWidget {
+  const _MetaSyncSection();
+
+  @override
+  ConsumerState<_MetaSyncSection> createState() => _MetaSyncSectionState();
+}
+
+class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
+  bool _busy = false;
+
+  Future<void> _configure({required bool rotate}) async {
+    final container = ProviderScope.containerOf(context, listen: false);
+    final prefs = container.read(metaSyncPrefsProvider);
+    final messenger = ScaffoldMessenger.of(context);
+
+    final urlController = TextEditingController(text: prefs.serverUrl ?? 'https://');
+    final tokenController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(rotate ? 'Regenerar API key' : 'Conectar con Meta IA'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: urlController,
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(labelText: 'URL del servidor', hintText: 'https://tu-servidor.onrender.com'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: tokenController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Setup token'),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'El setup token lo definiste tú al desplegar el servidor (variable SETUP_TOKEN). No se guarda en la app: sólo sirve para pedir la API key una vez.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Conectar')),
+        ],
+      ),
+    );
+    final serverUrl = urlController.text.trim();
+    final setupToken = tokenController.text.trim();
+    urlController.dispose();
+    tokenController.dispose();
+    if (confirmed != true || serverUrl.isEmpty || setupToken.isEmpty) return;
+
+    setState(() => _busy = true);
+    try {
+      final apiKey = await container.read(metaSyncClientProvider).setup(serverUrl: serverUrl, setupToken: setupToken, rotate: rotate);
+      await prefs.setCredentials(serverUrl: serverUrl, apiKey: apiKey);
+      container.read(metaSyncEnabledProvider.notifier).set(true);
+      messenger.showSnackBar(const SnackBar(content: Text('Conectado. Sincronizando…')));
+      await container.read(metaSyncServiceProvider).syncNow();
+      if (mounted) messenger.showSnackBar(const SnackBar(content: Text('Listo: ya puedes usar tu conector de Meta IA.')));
+    } on MetaSyncException catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text('No se pudo conectar: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _runSync(Future<void> Function() action, {required String successMessage}) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      await action();
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(successMessage)));
+    } on MetaSyncException catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text('No se pudo completar: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _disconnect() async {
+    final container = ProviderScope.containerOf(context, listen: false);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('¿Desconectar Meta IA?'),
+        content: const Text('Se borra la API key guardada en este teléfono. El servidor y lo que ya se sincronizó no se tocan.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Desconectar')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await container.read(metaSyncPrefsProvider).clearCredentials();
+    container.read(metaSyncEnabledProvider.notifier).set(false);
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final prefs = ref.watch(metaSyncPrefsProvider);
+    final enabled = ref.watch(metaSyncEnabledProvider);
+    final configured = prefs.isConfigured;
+    final service = ref.read(metaSyncServiceProvider);
+
+    return Column(
+      children: [
+        SwitchListTile(
+          secondary: const Icon(Icons.hub_outlined),
+          title: const Text('Conectar con Meta IA'),
+          subtitle: Text(
+            !configured
+                ? 'Sin configurar todavía. Pulsa "Configurar servidor" para empezar.'
+                : enabled
+                    ? 'Activo — sincronizando con ${prefs.serverUrl}'
+                    : 'Configurado pero apagado: ${prefs.serverUrl}',
+          ),
+          value: enabled && configured,
+          onChanged: _busy || !configured ? null : (v) => ref.read(metaSyncEnabledProvider.notifier).set(v),
+        ),
+        ListTile(
+          leading: const Icon(Icons.settings_ethernet),
+          title: Text(configured ? 'Reconfigurar servidor' : 'Configurar servidor'),
+          subtitle: const Text('Pega la URL de tu servidor y el setup token (ver server/README.md)'),
+          enabled: !_busy,
+          onTap: () => _configure(rotate: false),
+        ),
+        if (configured) ...[
+          ListTile(
+            leading: const Icon(Icons.vpn_key_outlined),
+            title: const Text('Regenerar API key'),
+            subtitle: const Text('Invalida la key anterior'),
+            enabled: !_busy,
+            onTap: () => _configure(rotate: true),
+          ),
+          ListTile(
+            leading: const Icon(Icons.sync),
+            title: const Text('Sincronizar ahora'),
+            enabled: !_busy,
+            onTap: () => _runSync(service.syncNow, successMessage: 'Sincronizado.'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.restart_alt),
+            title: const Text('Forzar sincronización completa'),
+            subtitle: const Text('Reenvía y relee todo desde cero'),
+            enabled: !_busy,
+            onTap: () => _runSync(service.fullResync, successMessage: 'Sincronización completa lista.'),
+          ),
+          ListTile(
+            leading: Icon(Icons.link_off, color: scheme.error),
+            title: Text('Desconectar', style: TextStyle(color: scheme.error)),
+            enabled: !_busy,
+            onTap: _disconnect,
+          ),
+        ],
+      ],
     );
   }
 }

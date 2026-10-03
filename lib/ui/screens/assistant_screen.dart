@@ -100,7 +100,10 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
 
     // Crear/actualizar un presupuesto desde el chat puede cruzar un umbral con
     // datos que ya existían: se revisa igual que tras guardar un movimiento.
-    if (result.pending == null) unawaited(checkBudgetAlerts(container));
+    if (result.pending == null) {
+      unawaited(checkBudgetAlerts(container));
+      unawaited(syncWithMetaIfEnabled(container));
+    }
   }
 
   /// Si el mensaje anterior dejó pendiente un solo dato ('amount' o

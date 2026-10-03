@@ -1,0 +1,26 @@
+name: arnic_finance_server
+description: >
+  API para integraciones externas (p. ej. un conector de Meta IA) con Arnic
+  Finance. Mantiene su propio espejo de los datos del usuario y sincroniza con
+  el teléfono por `updated_at` (mono-dispositivo: no resuelve conflictos
+  multi-cliente a propósito). Ver docs/API.md en la raíz del repo.
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  drift: ^2.35.0
+  sqlite3: ^3.0.0
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
+  crypto: ^3.0.6
+  uuid: ^4.6.0
+  args: ^2.6.0
+
+dev_dependencies:
+  test: ^1.26.0
+  drift_dev: ^2.35.0
+  build_runner: ^2.16.1
+  http: ^1.2.2

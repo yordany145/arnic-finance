@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -117,10 +119,11 @@ class _BudgetEditorState extends ConsumerState<_BudgetEditor> {
     final pesos = double.tryParse(_amount.text.replaceAll(',', '.'));
     if (pesos == null || pesos <= 0) return;
     final minor = (pesos * 100).round();
-    final repo = ref.read(budgetRepositoryProvider);
-    // Capturado antes del await: `ref` puede dejar de ser válido si la hoja se
-    // cierra mientras se guarda.
-    final notifier = ref.read(budgetNotifierProvider);
+    // Capturado antes de los await: `ref` puede dejar de ser válido si la
+    // hoja se cierra mientras se guarda.
+    final container = ProviderScope.containerOf(context, listen: false);
+    final repo = container.read(budgetRepositoryProvider);
+    final notifier = container.read(budgetNotifierProvider);
 
     if (widget.existing != null) {
       await repo.updateAmount(widget.existing!.id, minor);
@@ -137,6 +140,7 @@ class _BudgetEditorState extends ConsumerState<_BudgetEditor> {
       // Sólo tiene sentido pedir el permiso cuando ya hay algo que notificar.
       await notifier.requestPermission();
     }
+    unawaited(syncWithMetaIfEnabled(container));
     if (mounted) Navigator.pop(context);
   }
 

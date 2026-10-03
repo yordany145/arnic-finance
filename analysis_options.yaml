@@ -5,3 +5,5 @@ analyzer:
     - build/**
     - android/**
     - ios/**
+    # Paquete Dart independiente, con su propio pubspec.yaml y analysis_options.
+    - server/**

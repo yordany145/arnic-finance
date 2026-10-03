@@ -42,6 +42,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             await repo.restore(m.id);
             quick.refreshWidgets();
             unawaited(checkBudgetAlerts(container));
+            unawaited(syncWithMetaIfEnabled(container));
             if (mounted) setState(() => _hidden.remove(m.id));
           },
         ),

@@ -23,7 +23,11 @@ class _ArnicAppState extends ConsumerState<ArnicApp> with WidgetsBindingObserver
     super.initState();
     _locked = ref.read(appLockEnabledProvider);
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => checkBudgetAlerts(ProviderScope.containerOf(context, listen: false)));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final container = ProviderScope.containerOf(context, listen: false);
+      checkBudgetAlerts(container);
+      syncWithMetaIfEnabled(container);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _openPendingRoute());
   }
 
@@ -60,7 +64,10 @@ class _ArnicAppState extends ConsumerState<ArnicApp> with WidgetsBindingObserver
     // Por si la hoja rápida nativa insertó un gasto mientras la app dormía.
     // (Kotlin ya intenta notificar al guardar; esto es el respaldo. La tabla
     // budget_alerts evita que se avise dos veces.)
-    checkBudgetAlerts(ProviderScope.containerOf(context, listen: false));
+    final container = ProviderScope.containerOf(context, listen: false);
+    checkBudgetAlerts(container);
+    // No-op si la integración con Meta IA está apagada (el caso por defecto).
+    syncWithMetaIfEnabled(container);
   }
 
   @override

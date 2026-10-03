@@ -4,6 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/money.dart';
 import '../data/app_lock_prefs.dart';
 import '../data/database.dart';
+import '../data/meta_sync_client.dart';
+import '../data/meta_sync_prefs.dart';
+import '../data/meta_sync_service.dart';
 import '../data/repositories/drift_account_repository.dart';
 import '../data/repositories/drift_budget_repository.dart';
 import '../data/repositories/drift_category_repository.dart';
@@ -49,6 +52,47 @@ final appLockEnabledProvider = NotifierProvider<AppLockEnabledNotifier, bool>(Ap
 /// `false` si el teléfono no tiene ninguna forma de desbloqueo configurada:
 /// en ese caso no tiene sentido ofrecer el interruptor en Ajustes.
 final appLockSupportedProvider = FutureProvider<bool>((ref) => ref.watch(appLockProvider).isSupported());
+
+// ── Integración opcional con Meta IA (ver docs/API.md) ──────────────────────
+final metaSyncPrefsProvider = Provider<MetaSyncPrefs>((ref) => MetaSyncPrefs(ref.watch(sharedPreferencesProvider)));
+
+final metaSyncClientProvider = Provider<MetaSyncClient>((ref) {
+  final client = MetaSyncClient();
+  ref.onDispose(client.close);
+  return client;
+});
+
+final metaSyncServiceProvider = Provider<MetaSyncService>(
+  (ref) => MetaSyncService(ref.watch(databaseProvider), ref.watch(metaSyncClientProvider), ref.watch(metaSyncPrefsProvider)),
+);
+
+/// Igual que `AppLockEnabledNotifier`: estado en memoria sembrado desde las
+/// preferencias, para que la UI reaccione al toggle sin reconstruir la pantalla.
+class MetaSyncEnabledNotifier extends Notifier<bool> {
+  @override
+  bool build() => ref.watch(metaSyncPrefsProvider).enabled;
+
+  void set(bool value) {
+    state = value;
+    ref.read(metaSyncPrefsProvider).setEnabled(value);
+  }
+}
+
+final metaSyncEnabledProvider = NotifierProvider<MetaSyncEnabledNotifier, bool>(MetaSyncEnabledNotifier.new);
+
+/// Llamar tras guardar/editar/borrar/restaurar un movimiento (o presupuesto) y
+/// al reanudar la app — igual que `checkBudgetAlerts`. No lanza si falla
+/// (puede que no haya internet): una sincronización fallida nunca debe
+/// impedir que el movimiento ya guardado se vea.
+Future<void> syncWithMetaIfEnabled(ProviderContainer container) async {
+  final prefs = container.read(metaSyncPrefsProvider);
+  if (!prefs.enabled || !prefs.isConfigured) return;
+  try {
+    await container.read(metaSyncServiceProvider).syncNow();
+  } catch (_) {
+    // Ver comentario de arriba.
+  }
+}
 
 // ── Repositorios ─────────────────────────────────────────────────────────────
 // Único punto donde se elige la implementación concreta (local). Una futura
