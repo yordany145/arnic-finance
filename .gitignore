@@ -50,3 +50,6 @@ app.*.map.json
 # Playwright MCP (archivos temporales de sesión)
 .playwright-mcp/
 bridge/deploy/ssh/
+
+# Acceso al VPS (host, estructura y reglas del servidor): solo local, el repo es público
+docs/VPS-ACCESO.md
