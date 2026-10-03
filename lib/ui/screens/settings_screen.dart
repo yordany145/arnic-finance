@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -258,9 +259,11 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
         ..showSnackBar(const SnackBar(content: Text('Conectado. Sincronizando…')));
       await container.read(metaSyncServiceProvider).syncNow();
       if (mounted) {
-        messenger
-          ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(content: Text('Listo: ya puedes usar tu conector de Meta IA.')));
+        messenger.hideCurrentSnackBar();
+        // La API key sólo se muestra en este momento (y desde "Ver API key"
+        // más adelante): es lo único que le falta al usuario para dársela a
+        // su conector de Meta IA, y la app nunca se la manda a nadie.
+        await _showApiKey(apiKey);
       }
     } on MetaSyncException catch (e) {
       if (mounted) {
@@ -277,6 +280,38 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Muestra la API key para copiarla: es lo único que le falta al usuario
+  /// para dársela a su conector de Meta IA (junto con la URL del servidor).
+  /// La app nunca la envía a ningún sitio salvo al propio servidor configurado.
+  Future<void> _showApiKey(String apiKey) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Tu API key'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Dale esto a tu conector de Meta IA junto con la URL del servidor:'),
+            const SizedBox(height: 12),
+            SelectableText(apiKey, style: const TextStyle(fontFamily: 'monospace')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cerrar')),
+          FilledButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: apiKey));
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            },
+            icon: const Icon(Icons.copy, size: 18),
+            label: const Text('Copiar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _runSync(Future<void> Function() action, {required String successMessage}) async {
@@ -367,6 +402,13 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
           onTap: () => _configure(rotate: true),
         ),
         if (configured) ...[
+          ListTile(
+            leading: const Icon(Icons.key_outlined),
+            title: const Text('Ver API key'),
+            subtitle: const Text('Para dársela a tu conector de Meta IA'),
+            enabled: !_busy,
+            onTap: () => _showApiKey(prefs.apiKey!),
+          ),
           ListTile(
             leading: const Icon(Icons.vpn_key_outlined),
             title: const Text('Regenerar API key'),

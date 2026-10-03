@@ -83,11 +83,17 @@ void main() {
 
     await tester.tap(find.text('Conectar'));
     await settle(tester);
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await settle(tester);
 
     // Si algo en el camino lanzó una excepción no atrapada, aparece aquí.
     expect(tester.takeException(), isNull);
-    expect(find.textContaining('Listo'), findsOneWidget);
+    // Tras conectar, se muestra la API key para copiarla (es lo único que le
+    // falta al usuario para dársela a su conector de Meta IA).
+    expect(find.text('Tu API key'), findsOneWidget);
+    expect(find.text('fake-key'), findsOneWidget);
+    await tester.tap(find.text('Cerrar'));
+    await settle(tester);
+    expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 1));
