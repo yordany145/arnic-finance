@@ -49,3 +49,4 @@ app.*.map.json
 
 # Playwright MCP (archivos temporales de sesión)
 .playwright-mcp/
+bridge/deploy/ssh/
