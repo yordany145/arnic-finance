@@ -361,7 +361,11 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
           title: Text(configured ? 'Reconfigurar servidor' : 'Configurar servidor'),
           subtitle: const Text('Pega la URL de tu servidor y el setup token (ver server/README.md)'),
           enabled: !_busy,
-          onTap: () => _configure(rotate: false),
+          // rotate: true es seguro aquí en los dos casos: si el servidor
+          // todavía no tiene ninguna key, la crea igual (rotate se ignora);
+          // si ya tiene una (p. ej. quedó aprovisionada de una prueba previa),
+          // la reemplaza en vez de fallar con 409 "ya existe".
+          onTap: () => _configure(rotate: true),
         ),
         if (configured) ...[
           ListTile(
