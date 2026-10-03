@@ -14,6 +14,8 @@ class Purchase:
     currency: str  # 'LOCAL' | 'USD'
     merchant: str
     card_last4: str | None
+    bank: str = ""
+    when_ms: int | None = None  # fecha del cuerpo, si el aviso la trae con hora exacta
 
 
 class NotAPurchase(Exception):
@@ -94,3 +96,42 @@ def categorize(merchant: str, rules: dict, fallback: str) -> str:
         if any(_strip_accents(k).lower() in haystack for k in keywords):
             return category
     return fallback
+
+
+_BHD_ROW = re.compile(
+    r"\|\s*(\d{2})/(\d{2})/(\d{4})\s+(\d{1,2}):(\d{2})\s*([ap]m)\s*\|\s*([A-Za-z]{2,3})\s*\|\s*\$?\s*([\d.,]+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|", re.I)
+_BHD_CARD = re.compile(r"Tarjeta[^#\n]*#\s*(\d{4})", re.I)
+
+
+def parse_bhd(body: str) -> list:
+    """Filas de 'Detalle de Transacciones' de BHD. Solo compras aprobadas; el resto (retiros, pagos, reversos) se ignora."""
+    from datetime import datetime, timedelta, timezone
+    card = _BHD_CARD.search(body)
+    out = []
+    for d, mo, y, hh, mi, ap, cur, amount, merchant, estado, tipo in _BHD_ROW.findall(body):
+        if not re.search(r"aprobad", estado, re.I) or not re.fullmatch(r"compra|consumo", tipo.strip(), re.I):
+            continue
+        minor = parse_amount(amount)
+        if minor <= 0:
+            continue
+        hour = int(hh) % 12 + (12 if ap.lower() == "pm" else 0)
+        local = datetime(int(y), int(mo), int(d), hour, int(mi), tzinfo=timezone(timedelta(hours=-4)))  # hora de República Dominicana
+        out.append(Purchase(minor, "USD" if cur.upper().startswith("US") else "LOCAL", re.sub(r"\s+", " ", merchant).strip(),
+                            card.group(1) if card else None, "bhd", int(local.timestamp() * 1000)))
+    return out
+
+
+def parse_email(sender: str, subject: str, body: str) -> list:
+    """Compras que contiene un correo. Solo se reconocen los avisos de consumo de tarjeta de crédito de cada banco."""
+    if sender.endswith("@bhd.com.do"):
+        found = parse_bhd(body)
+        if not found:
+            raise NotAPurchase("aviso de BHD sin compra aprobada")
+        return found
+    if sender.endswith("@banreservas.com"):
+        if "NotificacionesTuBancoApp" in sender:
+            raise NotAPurchase("transferencias y pagos")
+        p = parse_purchase(subject, body)
+        p.bank = "banreservas"
+        return [p]
+    raise NotAPurchase("remitente no soportado")

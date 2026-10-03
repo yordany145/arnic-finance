@@ -70,7 +70,7 @@ def _alert_text(title, current, limit, kind, level, sym) -> str:
     return f"{head}\n{money(current, sym)} de {money(limit, sym)}"
 
 
-def report(snapshot: dict, now: datetime, sym: str, days: int, label: str) -> str:
+def report(snapshot: dict, now: datetime, sym: str, days: int, label: str, cards: dict | None = None) -> str:
     since = _ms((now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)) if days > 1 else _ms(now.replace(hour=0, minute=0, second=0, microsecond=0))
     cats = {c["id"]: c["name"] for c in snapshot["categories"]}
     txs = [t for t in _live(snapshot["transactions"]) if t["occurredAt"] >= since and t["type"] == "expense"]
@@ -85,9 +85,45 @@ def report(snapshot: dict, now: datetime, sym: str, days: int, label: str) -> st
     if top:
         lines.append("Mayores gastos:")
         lines += [f"  • {money(t['amountMinor'], sym)} — {t.get('note') or cats.get(t['categoryId'], '?')}" for t in top]
+    usage = card_usage(snapshot, now, cards or {})
+    if usage:
+        lines.append("Tarjetas (consumo del mes / límite):")
+        for _, account, spent, limit in usage:
+            lines.append(f"  • {account}: {money(spent, sym)}" + (f" / {money(limit, sym)} ({spent / limit:.0%})" if limit else ""))
     prog = progress(snapshot, now)
     if prog:
         lines.append("Presupuestos del mes:")
         for title, cur, lim, kind, _ in prog:
             lines.append(f"  • {title}: {money(cur, sym)} / {money(lim, sym)} ({cur / lim:.0%})")
     return "\n".join(lines)
+
+
+def card_usage(snapshot: dict, now: datetime, cards: dict):
+    """[(banco, cuenta, gastado_mes_minor, límite_minor)] por tarjeta configurada. Es consumo del mes: los pagos se ignoran a propósito."""
+    if not cards:
+        return []
+    start, end = _ms(month_start(now)), _ms(now) + 1
+    ids = {a["name"]: a["id"] for a in _live(snapshot["accounts"])}
+    out = []
+    for bank, c in cards.items():
+        aid = ids.get(c.get("account", ""))
+        spent = sum(t["amountMinor"] for t in _live(snapshot["transactions"])
+                    if t["type"] == "expense" and t["accountId"] == aid and start <= t["occurredAt"] < end) if aid else 0
+        out.append((bank, c.get("account", bank), spent, round(float(c.get("limit", 0)) * 100)))
+    return out
+
+
+def card_alerts(snapshot: dict, now: datetime, cards: dict, sym: str, already) -> list:
+    msgs = []
+    for bank, account, spent, limit in card_usage(snapshot, now, cards):
+        if not limit:
+            continue
+        ratio = spent / limit
+        for level, name in ((REACHED, "reached"), (APPROACHING, "approaching")):
+            if ratio >= level:
+                key = f"cardalert:{now:%Y-%m}:{bank}:{name}"
+                if not already(key):
+                    head = f"🚨 Llegaste al límite de {account}" if level == REACHED else f"⚠️ {account}: vas al {ratio:.0%} de su límite"
+                    msgs.append((key, f"{head}\nConsumo del mes: {money(spent, sym)} de {money(limit, sym)}"))
+                break
+    return msgs

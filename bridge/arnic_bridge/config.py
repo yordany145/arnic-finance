@@ -31,6 +31,7 @@ class Config:
     currency_symbol: str = "RD$"
     usd_to_local: float | None = None
     card_account: str = ""
+    cards: dict = field(default_factory=dict)  # banco -> {"account": nombre, "limit": unidades}
     fallback_category: str = "Otros"
     category_rules: dict = field(default_factory=lambda: dict(DEFAULT_CATEGORY_RULES))
     telegram_config_path: str = "/home/yordany/Escritorio/AI/telegram_bot/config.json"

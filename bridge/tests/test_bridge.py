@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from arnic_bridge import budgets, ledger, mail_source
 from arnic_bridge.config import DEFAULT_CATEGORY_RULES
-from arnic_bridge.parser import NotAPurchase, categorize, parse_amount, parse_purchase
+from arnic_bridge.parser import NotAPurchase, categorize, parse_amount, parse_email, parse_purchase
 
 
 class Parser(unittest.TestCase):
@@ -53,6 +53,65 @@ class Parser(unittest.TestCase):
         self.assertEqual(categorize("SUPERMERCADO NACIONAL", DEFAULT_CATEGORY_RULES, "Otros"), "Comida")
         self.assertEqual(categorize("Cafetería Ñandú", DEFAULT_CATEGORY_RULES, "Otros"), "Comida")
         self.assertEqual(categorize("XYZ 123", DEFAULT_CATEGORY_RULES, "Otros"), "Otros")
+
+
+BHD = ("| |\n\n| BHD Notificación de Transacciones Mastercard Local # 0000 Detalle de Criterios Te notificamos la transacción realizada con tu "
+       "Tarjeta Mastercard Local # 0000 En caso de no reconocer esta transacción, por favor llama. Detalle de Transacciones |\n"
+       "| Fecha | Moneda | Monto | Comercio | Estado | Tipo |\n| 21/09/2026 02:12 pm | RD | $3,990.00 | CCC CIBAO ECOMM | Aprobada | Compra |\n")
+
+
+class Cards(unittest.TestCase):
+    def test_bhd_row(self):
+        (p,) = parse_email("alertas@bhd.com.do", "BHD Notificación de Transacciones", BHD)
+        self.assertEqual((p.amount_minor, p.currency, p.merchant, p.card_last4, p.bank), (399000, "LOCAL", "CCC CIBAO ECOMM", "0000", "bhd"))
+        self.assertEqual(datetime.fromtimestamp(p.when_ms / 1000, ZoneInfo("America/Santo_Domingo")), datetime(2026, 9, 21, 14, 12, tzinfo=ZoneInfo("America/Santo_Domingo")))
+
+    def test_bhd_ignores_non_purchases(self):
+        for tipo, estado in (("Retiro", "Aprobada"), ("Compra", "Rechazada"), ("Pago", "Aprobada")):
+            with self.assertRaises(NotAPurchase):
+                parse_email("Alertas@bhd.com.do", "x", BHD.replace("Compra", tipo).replace("Aprobada", estado))
+        with self.assertRaises(NotAPurchase):  # transferencias de BHD: no traen tabla de compras
+            parse_email("Alertas@bhd.com.do", "Transacciones entre mis productos", "Producto origen: X Monto: RD$ 4000.00")
+
+    def test_banreservas_dispatch(self):
+        (p,) = parse_email("notificaciones@banreservas.com", "Notificaciones Banreservas", Parser.BANRESERVAS)
+        self.assertEqual((p.bank, p.amount_minor), ("banreservas", 490000))
+        with self.assertRaises(NotAPurchase):
+            parse_email("NotificacionesTuBancoApp@banreservas.com", "Recibo", Parser.BANRESERVAS)
+        with self.assertRaises(NotAPurchase):
+            parse_email("notificaciones@banreservas.com", "Notificaciones", "Transferencia Recibida Monto: RD$ 2130.00")
+        with self.assertRaises(NotAPurchase):
+            parse_email("promo@otro.com", "x", Parser.BANRESERVAS)
+
+    def test_only_configured_credit_cards(self):
+        from types import SimpleNamespace
+        from arnic_bridge import cli
+        sent, added = [], []
+        cfg = SimpleNamespace(cards={"bhd": {"account": "Tarjeta BHD", "last4": ["1111"]}}, usd_to_local=None, card_account="", category_rules={}, fallback_category="Otros", currency_symbol="RD$")
+        arnic = SimpleNamespace(add_expense=lambda *a: added.append(a))
+        tg = SimpleNamespace(send=sent.append)
+        state = SimpleNamespace(has=lambda k: False, add=lambda k: None)
+        mine = SimpleNamespace(message_id="1", sender="alertas@bhd.com.do", subject="x", body=BHD.replace("0000", "1111"), date_ms=0)
+        other = SimpleNamespace(message_id="2", sender="alertas@bhd.com.do", subject="x", body=BHD, date_ms=0)  # tarjeta ••0000
+        self.assertEqual(cli.process_mail(mine, cfg, arnic, tg, state), "registrado")
+        self.assertEqual(cli.process_mail(other, cfg, arnic, tg, state), "omitido")
+        self.assertEqual(len(added), 1)
+        self.assertEqual(added[0][4], "Tarjeta BHD")
+
+    def test_usage_and_limit_alerts(self):
+        tz = ZoneInfo("America/Santo_Domingo")
+        now = datetime(2026, 10, 15, 12, tzinfo=tz)
+        t = int(datetime(2026, 10, 10, tzinfo=tz).timestamp() * 1000)
+        snap = {"categories": [], "budgets": [], "accounts": [{"id": "a1", "name": "Tarjeta Banreservas"}, {"id": "a2", "name": "Tarjeta BHD"}],
+                "transactions": [{"type": "expense", "amountMinor": 1260000, "accountId": "a1", "categoryId": "c", "occurredAt": t},
+                                 {"type": "expense", "amountMinor": 500000, "accountId": "a2", "categoryId": "c", "occurredAt": t}]}
+        cards = {"banreservas": {"account": "Tarjeta Banreservas", "limit": 15000}, "bhd": {"account": "Tarjeta BHD", "limit": 30000}}
+        usage = {b: (spent, lim) for b, _, spent, lim in budgets.card_usage(snap, now, cards)}
+        self.assertEqual(usage, {"banreservas": (1260000, 1500000), "bhd": (500000, 3000000)})
+        alerts = budgets.card_alerts(snap, now, cards, "RD$", set().__contains__)
+        self.assertEqual(len(alerts), 1)  # solo Banreservas pasa del 80% (84%)
+        self.assertIn("84%", alerts[0][1])
+        self.assertIn("Tarjeta Banreservas", budgets.report(snap, now, "RD$", 7, "semanal", cards))
 
 
 class Budgets(unittest.TestCase):
