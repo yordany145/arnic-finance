@@ -20,7 +20,7 @@ Router setupRoutes(ServerDatabase db, String setupToken, RateLimiter limiter) {
     if (!limiter.allow('setup:${clientIp(request)}')) {
       return errorResponse(429, 'Demasiados intentos. Espera un momento.');
     }
-    if (request.headers['x-setup-token'] != setupToken) {
+    if (!constantTimeEquals(request.headers['x-setup-token'], setupToken)) {
       return errorResponse(401, 'X-Setup-Token inválido o ausente.');
     }
 

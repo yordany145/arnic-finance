@@ -7,6 +7,7 @@ import 'package:test/test.dart';
 
 import 'package:arnic_finance_server/db/database.dart';
 import 'package:arnic_finance_server/server.dart';
+import 'package:arnic_finance_server/util/rate_limit.dart';
 
 const _setupToken = 'test-setup-token';
 
@@ -72,6 +73,25 @@ void main() {
 
       expect((await get('/v1/categories', headers: {'authorization': 'Bearer $oldKey'})).statusCode, 401);
       expect((await get('/v1/categories', headers: {'authorization': 'Bearer $newKey'})).statusCode, 200);
+    });
+  });
+
+  group('limitador de /v1/setup', () {
+    test('cambiar el primer valor de X-Forwarded-For NO evita el límite (se usa la IP que añade el proxy)', () async {
+      var limited = 0;
+      for (var i = 0; i < 8; i++) {
+        final res = await post('/v1/setup', headers: {'x-setup-token': 'mal$i', 'x-forwarded-for': 'falsa-$i, 203.0.113.9'});
+        if (res.statusCode == 429) limited++;
+      }
+      expect(limited, greaterThan(0));
+    });
+
+    test('constantTimeEquals', () {
+      expect(constantTimeEquals('abc', 'abc'), isTrue);
+      expect(constantTimeEquals('abc', 'abd'), isFalse);
+      expect(constantTimeEquals('ab', 'abc'), isFalse);
+      expect(constantTimeEquals('abcd', 'abc'), isFalse);
+      expect(constantTimeEquals(null, 'abc'), isFalse);
     });
   });
 

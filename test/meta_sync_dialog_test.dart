@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:arnic_finance/data/meta_sync_prefs.dart';
+import 'package:arnic_finance/data/secret_store.dart';
 import 'package:arnic_finance/app.dart';
 import 'package:arnic_finance/data/database.dart';
 import 'package:arnic_finance/data/meta_sync_client.dart';
@@ -62,6 +64,7 @@ void main() {
       overrides: [
         databaseProvider.overrideWithValue(db),
         sharedPreferencesProvider.overrideWithValue(prefs),
+        metaSyncPrefsProvider.overrideWithValue(MetaSyncPrefs(prefs, MemorySecretStore())),
         metaSyncClientProvider.overrideWithValue(MetaSyncClient(httpClient: fakeHttp)),
       ],
       child: const ArnicApp(),
@@ -119,7 +122,8 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
 
     await tester.pumpWidget(ProviderScope(
-      overrides: [databaseProvider.overrideWithValue(db), sharedPreferencesProvider.overrideWithValue(prefs)],
+      overrides: [databaseProvider.overrideWithValue(db), sharedPreferencesProvider.overrideWithValue(prefs),
+        metaSyncPrefsProvider.overrideWithValue(MetaSyncPrefs(prefs, MemorySecretStore()))],
       child: const ArnicApp(),
     ));
     await settle(tester);

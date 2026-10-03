@@ -1,4 +1,6 @@
 import 'movement_input_helper.dart';
+import 'package:arnic_finance/data/meta_sync_prefs.dart';
+import 'package:arnic_finance/data/secret_store.dart';
 import 'package:arnic_finance/app.dart';
 import 'package:arnic_finance/data/database.dart';
 import 'package:arnic_finance/data/repositories/drift_movement_repository.dart';
@@ -48,6 +50,7 @@ void main() {
       overrides: [
         databaseProvider.overrideWithValue(db),
         sharedPreferencesProvider.overrideWithValue(prefs),
+        metaSyncPrefsProvider.overrideWithValue(MetaSyncPrefs(prefs, MemorySecretStore())),
       ],
       child: const ArnicApp(),
     ));

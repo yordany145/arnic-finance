@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:shelf/shelf.dart';
 
@@ -22,11 +23,27 @@ class RateLimiter {
   }
 }
 
+/// IP del cliente para el limitador. Detrás de un proxy (Render) el proxy AÑADE
+/// la IP real al FINAL de `X-Forwarded-For`; las entradas anteriores las puede
+/// escribir cualquiera, así que usar la primera permitiría saltarse el límite
+/// cambiando el encabezado en cada petición. Por eso se toma la última.
 String clientIp(Request request) {
   final forwarded = request.headers['x-forwarded-for'];
-  if (forwarded != null && forwarded.isNotEmpty) return forwarded.split(',').first.trim();
+  if (forwarded != null && forwarded.trim().isNotEmpty) return forwarded.split(',').last.trim();
   final connectionInfo = request.context['shelf.io.connection_info'];
-  return connectionInfo?.toString() ?? 'unknown';
+  if (connectionInfo is HttpConnectionInfo) return connectionInfo.remoteAddress.address;
+  return 'unknown';
+}
+
+/// Comparación en tiempo constante (no revela cuántos caracteres acertó un intento).
+bool constantTimeEquals(String? a, String b) {
+  if (a == null) return false;
+  final x = utf8.encode(a), y = utf8.encode(b);
+  var diff = x.length ^ y.length;
+  for (var i = 0; i < y.length; i++) {
+    diff |= (i < x.length ? x[i] : 0) ^ y[i];
+  }
+  return diff == 0;
 }
 
 Middleware rateLimitMiddleware(RateLimiter limiter, {required String Function(Request) keyOf}) {

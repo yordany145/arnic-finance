@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:arnic_finance/data/database.dart';
 import 'package:arnic_finance/data/meta_sync_client.dart';
 import 'package:arnic_finance/data/meta_sync_prefs.dart';
+import 'package:arnic_finance/data/secret_store.dart';
 import 'package:arnic_finance/data/meta_sync_service.dart';
 import 'package:arnic_finance/data/repositories/drift_movement_repository.dart';
 import 'package:arnic_finance/data/seed.dart';
@@ -38,7 +39,7 @@ void main() {
   setUp(() async {
     db = AppDatabase.inMemory();
     SharedPreferences.setMockInitialValues({});
-    prefs = MetaSyncPrefs(await SharedPreferences.getInstance());
+    prefs = MetaSyncPrefs(await SharedPreferences.getInstance(), MemorySecretStore());
     await prefs.setCredentials(serverUrl: 'https://servidor.ejemplo', apiKey: 'test-key');
   });
   tearDown(() => db.close());

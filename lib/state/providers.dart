@@ -54,7 +54,9 @@ final appLockEnabledProvider = NotifierProvider<AppLockEnabledNotifier, bool>(Ap
 final appLockSupportedProvider = FutureProvider<bool>((ref) => ref.watch(appLockProvider).isSupported());
 
 // ── Integración opcional con Meta IA (ver docs/API.md) ──────────────────────
-final metaSyncPrefsProvider = Provider<MetaSyncPrefs>((ref) => MetaSyncPrefs(ref.watch(sharedPreferencesProvider)));
+/// Se crea y se carga (`load()`) en main.dart: leer del Keystore es asíncrono.
+final metaSyncPrefsProvider =
+    Provider<MetaSyncPrefs>((ref) => throw UnimplementedError('metaSyncPrefsProvider no inicializado'));
 
 final metaSyncClientProvider = Provider<MetaSyncClient>((ref) {
   final client = MetaSyncClient();
