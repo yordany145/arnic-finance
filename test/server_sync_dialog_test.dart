@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-import 'package:arnic_finance/data/meta_sync_prefs.dart';
+import 'package:arnic_finance/data/server_sync_prefs.dart';
 import 'package:arnic_finance/data/secret_store.dart';
 import 'package:arnic_finance/app.dart';
 import 'package:arnic_finance/data/database.dart';
-import 'package:arnic_finance/data/meta_sync_client.dart';
+import 'package:arnic_finance/data/server_sync_client.dart';
 import 'package:arnic_finance/state/providers.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:flutter/material.dart';
@@ -64,8 +64,8 @@ void main() {
       overrides: [
         databaseProvider.overrideWithValue(db),
         sharedPreferencesProvider.overrideWithValue(prefs),
-        metaSyncPrefsProvider.overrideWithValue(MetaSyncPrefs(prefs, MemorySecretStore())),
-        metaSyncClientProvider.overrideWithValue(MetaSyncClient(httpClient: fakeHttp)),
+        serverSyncPrefsProvider.overrideWithValue(ServerSyncPrefs(prefs, MemorySecretStore())),
+        serverSyncClientProvider.overrideWithValue(ServerSyncClient(httpClient: fakeHttp)),
       ],
       child: const ArnicApp(),
     ));
@@ -75,6 +75,9 @@ void main() {
     await settle(tester);
 
     await tester.scrollUntilVisible(find.text('Configurar servidor'), 300, scrollable: find.byType(Scrollable).first);
+    // scrollUntilVisible se detiene en cuanto asoma: puede quedar bajo la barra inferior flotante. Se sube un poco más.
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -250));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Configurar servidor'));
     await tester.pumpAndSettle();
 
@@ -91,7 +94,7 @@ void main() {
     // Si algo en el camino lanzó una excepción no atrapada, aparece aquí.
     expect(tester.takeException(), isNull);
     // Tras conectar, se muestra la API key para copiarla (es lo único que le
-    // falta al usuario para dársela a su conector de Meta IA).
+    // falta al usuario para dársela a su servicio externo).
     expect(find.text('Tu API key'), findsOneWidget);
     expect(find.text('fake-key'), findsOneWidget);
     await tester.tap(find.text('Cerrar'));
@@ -123,7 +126,7 @@ void main() {
 
     await tester.pumpWidget(ProviderScope(
       overrides: [databaseProvider.overrideWithValue(db), sharedPreferencesProvider.overrideWithValue(prefs),
-        metaSyncPrefsProvider.overrideWithValue(MetaSyncPrefs(prefs, MemorySecretStore()))],
+        serverSyncPrefsProvider.overrideWithValue(ServerSyncPrefs(prefs, MemorySecretStore()))],
       child: const ArnicApp(),
     ));
     await settle(tester);

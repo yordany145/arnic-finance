@@ -123,7 +123,7 @@ class _AddMovementScreenState extends ConsumerState<AddMovementScreen> {
     }
     quickActions.refreshWidgets();
     unawaited(checkBudgetAlerts(container));
-    unawaited(syncWithMetaIfEnabled(container));
+    unawaited(syncWithServerIfEnabled(container));
     HapticFeedback.lightImpact();
 
     if (!mounted) return;
@@ -166,7 +166,7 @@ class _AddMovementScreenState extends ConsumerState<AddMovementScreen> {
             repo.restore(widget.editId!);
             quickActions.refreshWidgets();
             unawaited(checkBudgetAlerts(container));
-            unawaited(syncWithMetaIfEnabled(container));
+            unawaited(syncWithServerIfEnabled(container));
           },
         ),
       ));

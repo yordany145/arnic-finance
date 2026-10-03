@@ -1,13 +1,13 @@
-# API para integraciones externas (Meta IA y similares)
+# API para integraciones externas
 
 Esta API es **opcional** y vive en `server/` — un paquete Dart aparte, sin
-Flutter. Si nunca la despliegas y nunca activas "Conectar con Meta IA" en
+Flutter. Si nunca la despliegas y nunca activas "Sincronizar con el servidor" en
 Ajustes, la app sigue siendo 100% local, igual que siempre.
 
 ## Por qué existe un servidor, si la app es local
 
 La base de datos real de Arnic Finance vive sólo en tu teléfono. Para que
-Meta IA (o cualquier otra cosa en internet) pueda "ver" o "registrar" un
+un servicio externo (como el puente de correo `bridge/`) pueda "ver" o "registrar" un
 gasto, algo tiene que estar accesible por internet — un teléfono detrás de
 NAT del operador no lo está. Este servidor es un **espejo mínimo**: guarda una
 copia de tus cuentas/categorías/movimientos/presupuestos y se sincroniza con
@@ -20,7 +20,7 @@ del servidor se pierde (ver la nota sobre Render más abajo), basta con
 [Render](https://render.com) tiene un plan gratuito real: sin tarjeta de
 crédito, con soporte para Docker, 750 horas/mes. Única concesión: si nadie lo
 usa en 15 minutos se "duerme" y la primera llamada después tarda ~1 minuto en
-responder — razonable para algo que usas de vez en cuando por WhatsApp.
+responder — razonable para un servicio que se consulta de vez en cuando.
 
 1. Sube este repo a GitHub (o el que ya tienes).
 2. En Render: **New > Web Service**, conecta el repo, y en "Root Directory"
@@ -56,26 +56,18 @@ sólo sirve para ese primer intercambio.
 Si pierdes el teléfono o quieres invalidar la key, usa "Regenerar API key"
 (necesitas el `SETUP_TOKEN` de nuevo) o bórrala directamente del servidor.
 
-## 3. Conectar Meta IA (esto lo haces tú)
+## 3. Conectar un servicio externo
 
-Con el servidor arriba y la app sincronizada al menos una vez, ya tienes lo
-que un conector de Meta IA necesita: una URL base y una API key Bearer. Dale
-a Meta IA (o a lo que sea que construyas sobre su plataforma de conectores)
-estos tres endpoints como "herramientas":
+Con el servidor arriba y la app sincronizada al menos una vez, ya tienes lo que
+cualquier servicio necesita: una URL base y una API key Bearer. El primero en
+usarlo es el puente de correo de este repo (`bridge/`, ver su README): lee los
+avisos de consumo de tus tarjetas y los registra con estos endpoints:
 
 - `POST {url}/v1/movements` — registrar un gasto/ingreso.
 - `GET {url}/v1/summary?period=today|week|month|all` — ver totales.
-- `GET {url}/v1/categories` / `GET {url}/v1/accounts` — para que resuelva
-  nombres antes de registrar.
+- `GET {url}/v1/categories` / `GET {url}/v1/accounts` — resolver nombres antes de registrar.
 
-**Nota honesta:** al momento de escribir esto, lo que Meta documenta
-públicamente ("Meta AI Connectors") es que Meta IA llama tu API **cuando tú
-le hablas en el chat** (WhatsApp/Instagram) y le pides algo. No encontramos
-evidencia de que exista una función de consumidor donde Meta IA lea tu correo
-de forma autónoma y decida registrar gastos sin que se lo pidas. Si tu plan
-era ese segundo escenario, probablemente necesites una pieza intermedia
-(un flujo propio que lea el correo y llame esta API) — esta API no asume
-ninguno de los dos casos, sólo expone las herramientas.
+Cualquier otro programa tuyo puede usarlos igual.
 
 ## Referencia de la API
 
@@ -135,7 +127,7 @@ Aprovisiona o rota la única API key del servidor. Protegido por
 ### `GET /v1/categories?type=expense|income` y `GET /v1/accounts`
 
 Listan `{id, name, icon, type|kind}` — úsalos para resolver nombres antes de
-llamar a `/v1/movements`, o para que una conversación con Meta IA pueda
+llamar a `/v1/movements`, o para que un servicio pueda
 mostrarte las opciones.
 
 ### `GET /v1/sync?since=<epochMs>` y `POST /v1/sync`

@@ -1,10 +1,10 @@
 import 'dart:convert';
 
 import 'package:arnic_finance/data/database.dart';
-import 'package:arnic_finance/data/meta_sync_client.dart';
-import 'package:arnic_finance/data/meta_sync_prefs.dart';
+import 'package:arnic_finance/data/server_sync_client.dart';
+import 'package:arnic_finance/data/server_sync_prefs.dart';
 import 'package:arnic_finance/data/secret_store.dart';
-import 'package:arnic_finance/data/meta_sync_service.dart';
+import 'package:arnic_finance/data/server_sync_service.dart';
 import 'package:arnic_finance/data/repositories/drift_movement_repository.dart';
 import 'package:arnic_finance/data/seed.dart';
 import 'package:arnic_finance/domain/enums.dart';
@@ -34,12 +34,12 @@ http.StreamedResponse _json(int status, Object data) =>
 
 void main() {
   late AppDatabase db;
-  late MetaSyncPrefs prefs;
+  late ServerSyncPrefs prefs;
 
   setUp(() async {
     db = AppDatabase.inMemory();
     SharedPreferences.setMockInitialValues({});
-    prefs = MetaSyncPrefs(await SharedPreferences.getInstance(), MemorySecretStore());
+    prefs = ServerSyncPrefs(await SharedPreferences.getInstance(), MemorySecretStore());
     await prefs.setCredentials(serverUrl: 'https://servidor.ejemplo', apiKey: 'test-key');
   });
   tearDown(() => db.close());
@@ -59,7 +59,7 @@ void main() {
       if (request.method == 'POST') return _json(200, {'serverTimeMs': 123456});
       return _json(200, {'serverTimeMs': 123456, 'accounts': [], 'categories': [], 'transactions': [], 'budgets': []});
     });
-    final service = MetaSyncService(db, MetaSyncClient(httpClient: fake), prefs);
+    final service = ServerSyncService(db, ServerSyncClient(httpClient: fake), prefs);
 
     await service.syncNow();
 
@@ -82,12 +82,12 @@ void main() {
       }
       return _json(200, {'serverTimeMs': 1, 'accounts': [], 'categories': [], 'transactions': [], 'budgets': []});
     });
-    final service = MetaSyncService(db, MetaSyncClient(httpClient: fake), prefs);
+    final service = ServerSyncService(db, ServerSyncClient(httpClient: fake), prefs);
     await service.syncNow();
     expect(postCalls, 0);
   });
 
-  test('pull aplica movimientos nuevos del servidor (p. ej. registrados por Meta IA) a la base local', () async {
+  test('pull aplica movimientos nuevos del servidor (p. ej. registrados por el servicio externo) a la base local', () async {
     final fake = _FakeHttpClient((request, body) async {
       if (request.method == 'POST') return _json(200, {'serverTimeMs': 1});
       return _json(200, {
@@ -101,7 +101,7 @@ void main() {
             'amountMinor': 75000,
             'categoryId': 'exp_food',
             'accountId': kDefaultAccountId,
-            'note': 'Registrado por Meta IA',
+            'note': 'Registrado por el servicio externo',
             'occurredAt': DateTime(2026, 9, 10).millisecondsSinceEpoch,
             'createdAt': 1,
             'updatedAt': 1,
@@ -111,7 +111,7 @@ void main() {
         'budgets': [],
       });
     });
-    final service = MetaSyncService(db, MetaSyncClient(httpClient: fake), prefs);
+    final service = ServerSyncService(db, ServerSyncClient(httpClient: fake), prefs);
 
     await service.syncNow();
 
@@ -119,7 +119,7 @@ void main() {
     final m = await movements.getById('from-meta-ai');
     expect(m, isNotNull);
     expect(m!.amountMinor, 75000);
-    expect(m.note, 'Registrado por Meta IA');
+    expect(m.note, 'Registrado por el servicio externo');
     expect(prefs.lastPulledAt, 999);
   });
 
@@ -130,7 +130,7 @@ void main() {
       if (request.method == 'POST') return _json(200, {'serverTimeMs': 10});
       return _json(200, {'serverTimeMs': 10, 'accounts': [], 'categories': [], 'transactions': [], 'budgets': []});
     });
-    final service = MetaSyncService(db, MetaSyncClient(httpClient: fake), prefs);
+    final service = ServerSyncService(db, ServerSyncClient(httpClient: fake), prefs);
 
     await service.fullResync();
 
@@ -140,9 +140,9 @@ void main() {
     expect(prefs.lastPushedAt, 10);
   });
 
-  test('un error del servidor se propaga como MetaSyncException', () async {
+  test('un error del servidor se propaga como ServerSyncException', () async {
     final fake = _FakeHttpClient((request, body) async => _json(401, {'error': 'API key inválida.'}));
-    final service = MetaSyncService(db, MetaSyncClient(httpClient: fake), prefs);
-    await expectLater(service.syncNow(), throwsA(isA<MetaSyncException>()));
+    final service = ServerSyncService(db, ServerSyncClient(httpClient: fake), prefs);
+    await expectLater(service.syncNow(), throwsA(isA<ServerSyncException>()));
   });
 }

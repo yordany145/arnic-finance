@@ -1,11 +1,11 @@
 # Arnic Finance — servidor opcional para integraciones
 
 Paquete Dart independiente (sin Flutter). Expone una API HTTP para que
-servicios externos (p. ej. un conector de Meta IA) puedan leer y registrar
+servicios externos (p. ej. un servicio externo) puedan leer y registrar
 movimientos, sincronizándose con la app del teléfono.
 
 **No hace falta esto para usar Arnic Finance normalmente** — sólo si vas a
-activar "Conectar con Meta IA" en Ajustes. Ver `docs/API.md` en la raíz del
+activar "Sincronizar con el servidor" en Ajustes. Ver `docs/API.md` en la raíz del
 repo para la guía completa (despliegue en Render, cómo conectarlo a la app,
 referencia de cada endpoint).
 

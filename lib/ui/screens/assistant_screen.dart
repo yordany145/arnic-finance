@@ -102,7 +102,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
     // datos que ya existían: se revisa igual que tras guardar un movimiento.
     if (result.pending == null) {
       unawaited(checkBudgetAlerts(container));
-      unawaited(syncWithMetaIfEnabled(container));
+      unawaited(syncWithServerIfEnabled(container));
     }
   }
 

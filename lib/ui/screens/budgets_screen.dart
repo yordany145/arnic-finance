@@ -140,7 +140,7 @@ class _BudgetEditorState extends ConsumerState<_BudgetEditor> {
       // Sólo tiene sentido pedir el permiso cuando ya hay algo que notificar.
       await notifier.requestPermission();
     }
-    unawaited(syncWithMetaIfEnabled(container));
+    unawaited(syncWithServerIfEnabled(container));
     if (mounted) Navigator.pop(context);
   }
 

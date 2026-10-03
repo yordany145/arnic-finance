@@ -10,7 +10,7 @@ import '../util/json_response.dart';
 import '../util/period.dart';
 import '../util/validation.dart';
 
-/// `POST /v1/movements` (lo que usa Meta IA para registrar un gasto/ingreso) y
+/// `POST /v1/movements` (lo que usa el servicio externo para registrar un gasto/ingreso) y
 /// `GET /v1/movements` (listar). La idea central: nunca adivinar una
 /// categoría o cuenta ambigua — mejor devolver sugerencias y que quien llama
 /// reintente, que crear datos en el lugar equivocado.
@@ -47,7 +47,7 @@ Router movementRoutes(ServerDatabase db) {
     if (categories.isEmpty) {
       return errorResponse(
         409,
-        'Todavía no hay categorías sincronizadas desde el teléfono. Abre la app con "Conectar con Meta IA" activado al menos una vez.',
+        'Todavía no hay categorías sincronizadas desde el teléfono. Abre la app con "Sincronizar con el servidor" activado al menos una vez.',
       );
     }
     final match = matchCategory(categoryInput, categories);

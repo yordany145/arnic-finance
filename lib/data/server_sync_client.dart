@@ -4,8 +4,8 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-class MetaSyncException implements Exception {
-  MetaSyncException(this.message);
+class ServerSyncException implements Exception {
+  ServerSyncException(this.message);
   final String message;
 
   @override
@@ -22,7 +22,7 @@ class PullResult {
 
 /// Cliente HTTP del servidor opcional en `server/` (ver docs/API.md). Recibe
 /// un `http.Client` inyectable para poder probarlo sin red real.
-class MetaSyncClient {
+class ServerSyncClient {
   /// [timeout] es largo por defecto (ver comentario abajo) y sólo se acorta
   /// en tests; el código de producción nunca debería pasarlo.
   ///
@@ -30,7 +30,7 @@ class MetaSyncClient {
   /// primera petición después puede tardar ~1 minuto en responder mientras
   /// arranca. Por eso el tiempo de espera es largo (no es un valor arbitrario):
   /// cortarlo antes confundiría "está despertando" con "no hay conexión".
-  MetaSyncClient({http.Client? httpClient, this.timeout = const Duration(seconds: 70)}) : _http = httpClient ?? http.Client();
+  ServerSyncClient({http.Client? httpClient, this.timeout = const Duration(seconds: 70)}) : _http = httpClient ?? http.Client();
 
   final http.Client _http;
   final Duration timeout;
@@ -44,14 +44,14 @@ class MetaSyncClient {
     if (res.statusCode == 200 || res.statusCode == 201) {
       return (jsonDecode(res.body) as Map<String, dynamic>)['apiKey'] as String;
     }
-    throw MetaSyncException(_errorMessage(res));
+    throw ServerSyncException(_errorMessage(res));
   }
 
   Future<PullResult> pull({required String serverUrl, required String apiKey, required int since}) async {
     final res = await _send(
       () => _http.get(Uri.parse('${_normalize(serverUrl)}/v1/sync?since=$since'), headers: _authHeaders(apiKey)),
     );
-    if (res.statusCode != 200) throw MetaSyncException(_errorMessage(res));
+    if (res.statusCode != 200) throw ServerSyncException(_errorMessage(res));
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     return PullResult(
       serverTimeMs: body['serverTimeMs'] as int,
@@ -66,7 +66,7 @@ class MetaSyncClient {
     final res = await _send(
       () => _http.post(Uri.parse('${_normalize(serverUrl)}/v1/sync'), headers: _authHeaders(apiKey), body: jsonEncode(rows)),
     );
-    if (res.statusCode != 200) throw MetaSyncException(_errorMessage(res));
+    if (res.statusCode != 200) throw ServerSyncException(_errorMessage(res));
     return (jsonDecode(res.body) as Map<String, dynamic>)['serverTimeMs'] as int;
   }
 
@@ -77,15 +77,15 @@ class MetaSyncClient {
     try {
       return await request().timeout(timeout);
     } on TimeoutException {
-      throw MetaSyncException(
+      throw ServerSyncException(
         'El servidor no respondió a tiempo. Si llevaba un rato sin usarse puede estar "despertando" (plan gratis de Render) — intenta de nuevo en un minuto.',
       );
     } on SocketException {
-      throw MetaSyncException('No se pudo conectar. Revisa tu internet y que la URL del servidor sea correcta.');
+      throw ServerSyncException('No se pudo conectar. Revisa tu internet y que la URL del servidor sea correcta.');
     } on HandshakeException {
-      throw MetaSyncException('No se pudo establecer una conexión segura (HTTPS) con ese servidor. Revisa la URL.');
+      throw ServerSyncException('No se pudo establecer una conexión segura (HTTPS) con ese servidor. Revisa la URL.');
     } on FormatException {
-      throw MetaSyncException('La URL del servidor no es válida.');
+      throw ServerSyncException('La URL del servidor no es válida.');
     }
   }
 

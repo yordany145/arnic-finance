@@ -79,17 +79,17 @@ transacción, respetando el orden de claves foráneas al borrar e insertar.
 
 Paquete Dart aparte (sin Flutter) con su propia copia documentada del esquema (`server/lib/db/tables.dart`,
 mismo contrato que `lib/data/tables.dart`/Kotlin/Swift: no cambiar un lado sin el otro). Expone una API HTTP
-(`docs/API.md`) para que un servicio externo (p. ej. un conector de Meta IA) registre o lea movimientos.
+(`docs/API.md`) para que un servicio externo (p. ej. el puente de correo `bridge/`) registre o lea movimientos.
 
 - **Por qué un servidor aparte y no una librería compartida**: el paquete principal depende de Flutter; un
   paquete Dart puro no puede importarlo sin arrastrar el SDK de Flutter a un servidor. Se optó por el mismo
   patrón de "contrato documentado, código duplicado a propósito" que ya usan `QuickDb.kt`/`QuickDb.swift`.
-- **Un solo teléfono por cuenta**: la sincronización (`GET`/`POST /v1/sync`, `data/meta_sync_service.dart`
+- **Un solo teléfono por cuenta**: la sincronización (`GET`/`POST /v1/sync`, `data/server_sync_service.dart`
   del lado Flutter) compara `updated_at` contra el último cursor — no hay que resolver conflictos entre
   varios dispositivos porque, a propósito, no los hay.
 - **Auth**: una API key de 256 bits por cuenta (su hash SHA-256 es lo único que se guarda), aprovisionada
   una vez con `POST /v1/setup` protegido por `SETUP_TOKEN` (variable de entorno, nunca viaja a la app salvo
   en ese primer intercambio).
-- **Apagado por defecto**: `MetaSyncPrefs.enabled` controla si `syncWithMetaIfEnabled` (en `state/providers.dart`,
+- **Apagado por defecto**: `ServerSyncPrefs.enabled` controla si `syncWithServerIfEnabled` (en `state/providers.dart`,
   llamado junto a `checkBudgetAlerts` en los mismos puntos) hace algo o no. Mientras esté en `false`, la app
   no hace ninguna llamada de red — la promesa de "100% local" se mantiene literalmente.

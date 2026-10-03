@@ -26,7 +26,7 @@ class _ArnicAppState extends ConsumerState<ArnicApp> with WidgetsBindingObserver
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final container = ProviderScope.containerOf(context, listen: false);
       checkBudgetAlerts(container);
-      syncWithMetaIfEnabled(container);
+      syncWithServerIfEnabled(container);
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _openPendingRoute());
   }
@@ -66,8 +66,8 @@ class _ArnicAppState extends ConsumerState<ArnicApp> with WidgetsBindingObserver
     // budget_alerts evita que se avise dos veces.)
     final container = ProviderScope.containerOf(context, listen: false);
     checkBudgetAlerts(container);
-    // No-op si la integración con Meta IA está apagada (el caso por defecto).
-    syncWithMetaIfEnabled(container);
+    // No-op si la sincronización con el servidor está apagada (el caso por defecto).
+    syncWithServerIfEnabled(container);
   }
 
   @override

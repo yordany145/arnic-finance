@@ -169,7 +169,7 @@ void main() {
     });
   });
 
-  group('registrar un movimiento (lo que llamaría Meta IA)', () {
+  group('registrar un movimiento (lo que llamaría el servicio externo)', () {
     Future<String> setupWithSeed() async {
       final apiKey = await setupAndGetApiKey();
       final now = DateTime.now().millisecondsSinceEpoch;

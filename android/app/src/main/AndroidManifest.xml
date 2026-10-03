@@ -10,8 +10,8 @@
     <!-- Para el bloqueo de la app con huella/rostro/PIN del sistema (local_auth).
          No es un permiso "peligroso": el sistema no muestra diálogo de consentimiento. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-    <!-- Sólo para la integración OPCIONAL con Meta IA (Ajustes > Integraciones,
-         apagada por defecto): lib/data/meta_sync_client.dart necesita poder
+    <!-- Sólo para la sincronización OPCIONAL con el servidor (Ajustes > Integraciones,
+         apagada por defecto): lib/data/server_sync_client.dart necesita poder
          abrir una conexión HTTP al servidor que el usuario configure. No es un
          permiso "peligroso" (el sistema no pide confirmación), pero sin esto
          Android bloquea cualquier socket y la app no puede ni intentarlo. -->

@@ -1,22 +1,22 @@
 import 'package:drift/drift.dart';
 
 import 'database.dart';
-import 'meta_sync_client.dart';
-import 'meta_sync_prefs.dart';
+import 'server_sync_client.dart';
+import 'server_sync_prefs.dart';
 
 /// Orquesta subir los cambios locales y bajar los del servidor. Como sólo hay
 /// un teléfono por cuenta, no hace falta resolver conflictos entre
 /// dispositivos: basta con comparar `updated_at` contra el último cursor
 /// guardado (ver docs/API.md, sección "Protocolo de sincronización").
-class MetaSyncService {
-  MetaSyncService(this._db, this._client, this._prefs);
+class ServerSyncService {
+  ServerSyncService(this._db, this._client, this._prefs);
 
   final AppDatabase _db;
-  final MetaSyncClient _client;
-  final MetaSyncPrefs _prefs;
+  final ServerSyncClient _client;
+  final ServerSyncPrefs _prefs;
 
   Future<void> syncNow() async {
-    if (!_prefs.isConfigured) throw MetaSyncException('No hay un servidor configurado todavía.');
+    if (!_prefs.isConfigured) throw ServerSyncException('No hay un servidor configurado todavía.');
     final serverUrl = _prefs.serverUrl!;
     final apiKey = _prefs.apiKey!;
     await _push(serverUrl, apiKey);

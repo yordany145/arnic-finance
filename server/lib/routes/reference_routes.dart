@@ -7,7 +7,7 @@ import '../db/database.dart';
 import '../util/json_response.dart';
 
 /// `GET /v1/categories` y `GET /v1/accounts`: para que quien integra la API
-/// (p. ej. la lógica detrás de un conector de Meta IA) sepa qué nombres
+/// (p. ej. la lógica detrás de un servicio externo) sepa qué nombres
 /// existen de verdad antes de intentar registrar un movimiento.
 Router referenceRoutes(ServerDatabase db) {
   final router = Router();

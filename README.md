@@ -14,7 +14,7 @@ incluso sin abrir la app.
 - **Asistente**: chat local (no un LLM) que responde preguntas sobre tus finanzas y puede crear presupuestos
   a partir de una frase ("avísame si gasto más de 5000 en Comida"). Ver `lib/domain/assistant/`.
 - **Respaldo**: exportar/restaurar todo el historial como un único JSON (Ajustes > Respaldo).
-- **API opcional para integraciones** (p. ej. un conector de Meta IA): servidor aparte en `server/`,
+- **API opcional para integraciones** (p. ej. el puente de correo `bridge/`): servidor aparte en `server/`,
   apagado por defecto — si no lo activas, la app sigue siendo 100% local. Ver [docs/API.md](docs/API.md).
 
 ## Entorno de este equipo
@@ -31,7 +31,7 @@ flutter build apk --release --target-platform android-arm64
 - [Qué se puede hacer en Android/iOS, permisos y restricciones](docs/SISTEMA_ANDROID_IOS.md)
 - [Arquitectura y decisiones](docs/ARQUITECTURA.md)
 - [Puesta en marcha de iOS (Xcode)](docs/IOS.md)
-- [API opcional para integraciones externas (Meta IA, etc.)](docs/API.md)
+- [API opcional para integraciones externas](docs/API.md)
 
 ## Próximos pasos sugeridos
 1. Probar tile/widget en un teléfono real (no se ha podido en este equipo).

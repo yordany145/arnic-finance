@@ -1,6 +1,6 @@
 name: arnic_finance_server
 description: >
-  API para integraciones externas (p. ej. un conector de Meta IA) con Arnic
+  API para integraciones externas (p. ej. un servicio externo) con Arnic
   Finance. Mantiene su propio espejo de los datos del usuario y sincroniza con
   el teléfono por `updated_at` (mono-dispositivo: no resuelve conflictos
   multi-cliente a propósito). Ver docs/API.md en la raíz del repo.

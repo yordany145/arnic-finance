@@ -12,7 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../data/backup_service.dart';
-import '../../data/meta_sync_client.dart';
+import '../../data/server_sync_client.dart';
 import '../../state/providers.dart';
 import '../widgets/update_tile.dart';
 
@@ -207,14 +207,14 @@ class SettingsScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
             child: Text('INTEGRACIONES', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant)),
           ),
-          const _MetaSyncSection(),
+          const _ServerSyncSection(),
           const Divider(height: 32),
           ListTile(
             leading: const Icon(Icons.lock_outline),
             title: const Text('Privacidad'),
             subtitle: Text(
-              ref.watch(metaSyncEnabledProvider)
-                  ? 'Tus datos se guardan en este dispositivo. Activaste "Conectar con Meta IA": tus movimientos y categorías también se envían al servidor que configuraste.'
+              ref.watch(serverSyncEnabledProvider)
+                  ? 'Tus datos se guardan en este dispositivo. Activaste la sincronización con el servidor: tus movimientos y categorías también se envían al servidor que configuraste.'
                   : 'Tus datos financieros se guardan sólo en este dispositivo. La app no se conecta a ningún servidor.',
             ),
           ),
@@ -244,19 +244,19 @@ class _VersionCaption extends StatelessWidget {
   }
 }
 
-class _MetaSyncSection extends ConsumerStatefulWidget {
-  const _MetaSyncSection();
+class _ServerSyncSection extends ConsumerStatefulWidget {
+  const _ServerSyncSection();
 
   @override
-  ConsumerState<_MetaSyncSection> createState() => _MetaSyncSectionState();
+  ConsumerState<_ServerSyncSection> createState() => _ServerSyncSectionState();
 }
 
-class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
+class _ServerSyncSectionState extends ConsumerState<_ServerSyncSection> {
   bool _busy = false;
 
   Future<void> _configure({required bool rotate}) async {
     final container = ProviderScope.containerOf(context, listen: false);
-    final prefs = container.read(metaSyncPrefsProvider);
+    final prefs = container.read(serverSyncPrefsProvider);
     final messenger = ScaffoldMessenger.of(context);
 
     // `_ConnectDialog` es un StatefulWidget con sus propios controllers
@@ -282,21 +282,21 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
       const SnackBar(content: Text('Conectando… puede tardar hasta un minuto si el servidor estaba dormido.'), duration: Duration(seconds: 65)),
     );
     try {
-      final apiKey = await container.read(metaSyncClientProvider).setup(serverUrl: serverUrl, setupToken: setupToken, rotate: rotate);
+      final apiKey = await container.read(serverSyncClientProvider).setup(serverUrl: serverUrl, setupToken: setupToken, rotate: rotate);
       await prefs.setCredentials(serverUrl: serverUrl, apiKey: apiKey);
-      container.read(metaSyncEnabledProvider.notifier).set(true);
+      container.read(serverSyncEnabledProvider.notifier).set(true);
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(const SnackBar(content: Text('Conectado. Sincronizando…')));
-      await container.read(metaSyncServiceProvider).syncNow();
+      await container.read(serverSyncServiceProvider).syncNow();
       if (mounted) {
         messenger.hideCurrentSnackBar();
         // La API key sólo se muestra en este momento (y desde "Ver API key"
         // más adelante): es lo único que le falta al usuario para dársela a
-        // su conector de Meta IA, y la app nunca se la manda a nadie.
+        // su servicio externo, y la app nunca se la manda a nadie.
         await _showApiKey(apiKey);
       }
-    } on MetaSyncException catch (e) {
+    } on ServerSyncException catch (e) {
       if (mounted) {
         messenger
           ..hideCurrentSnackBar()
@@ -314,7 +314,7 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
   }
 
   /// Muestra la API key para copiarla: es lo único que le falta al usuario
-  /// para dársela a su conector de Meta IA (junto con la URL del servidor).
+  /// para dársela a su servicio externo (junto con la URL del servidor).
   /// La app nunca la envía a ningún sitio salvo al propio servidor configurado.
   Future<void> _showApiKey(String apiKey) {
     return showDialog<void>(
@@ -325,7 +325,7 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Dale esto a tu conector de Meta IA junto con la URL del servidor:'),
+            const Text('Es la clave con la que el puente de correo (u otro servicio tuyo) entra a tu servidor, junto con su URL:'),
             const SizedBox(height: 12),
             SelectableText(apiKey, style: const TextStyle(fontFamily: 'monospace')),
           ],
@@ -358,7 +358,7 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(content: Text(successMessage)));
       }
-    } on MetaSyncException catch (e) {
+    } on ServerSyncException catch (e) {
       if (mounted) {
         messenger
           ..hideCurrentSnackBar()
@@ -380,7 +380,7 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('¿Desconectar Meta IA?'),
+        title: const Text('¿Desconectar el servidor?'),
         content: const Text('Se borra la API key guardada en este teléfono. El servidor y lo que ya se sincronizó no se tocan.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
@@ -389,18 +389,18 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
       ),
     );
     if (confirmed != true) return;
-    await container.read(metaSyncPrefsProvider).clearCredentials();
-    container.read(metaSyncEnabledProvider.notifier).set(false);
+    await container.read(serverSyncPrefsProvider).clearCredentials();
+    container.read(serverSyncEnabledProvider.notifier).set(false);
     if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final prefs = ref.watch(metaSyncPrefsProvider);
-    final enabled = ref.watch(metaSyncEnabledProvider);
+    final prefs = ref.watch(serverSyncPrefsProvider);
+    final enabled = ref.watch(serverSyncEnabledProvider);
     final configured = prefs.isConfigured;
-    final service = ref.read(metaSyncServiceProvider);
+    final service = ref.read(serverSyncServiceProvider);
 
     return Column(
       children: [
@@ -410,7 +410,7 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
         if (_busy) const LinearProgressIndicator(),
         SwitchListTile(
           secondary: const Icon(Icons.hub_outlined),
-          title: const Text('Conectar con Meta IA'),
+          title: const Text('Sincronizar con el servidor'),
           subtitle: Text(
             !configured
                 ? 'Sin configurar todavía. Pulsa "Configurar servidor" para empezar.'
@@ -419,7 +419,7 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
                     : 'Configurado pero apagado: ${prefs.serverUrl}',
           ),
           value: enabled && configured,
-          onChanged: _busy || !configured ? null : (v) => ref.read(metaSyncEnabledProvider.notifier).set(v),
+          onChanged: _busy || !configured ? null : (v) => ref.read(serverSyncEnabledProvider.notifier).set(v),
         ),
         ListTile(
           leading: const Icon(Icons.settings_ethernet),
@@ -436,7 +436,7 @@ class _MetaSyncSectionState extends ConsumerState<_MetaSyncSection> {
           ListTile(
             leading: const Icon(Icons.key_outlined),
             title: const Text('Ver API key'),
-            subtitle: const Text('Para dársela a tu conector de Meta IA'),
+            subtitle: const Text('Para el puente que lee tus avisos del banco'),
             enabled: !_busy,
             onTap: () => _showApiKey(prefs.apiKey!),
           ),
@@ -539,7 +539,7 @@ class _ConnectDialogState extends State<_ConnectDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.rotate ? 'Regenerar API key' : 'Conectar con Meta IA'),
+      title: Text(widget.rotate ? 'Regenerar API key' : 'Sincronizar con el servidor'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -7,7 +7,7 @@ import 'app.dart';
 import 'core/date_labels.dart';
 import 'data/database.dart';
 import 'data/db_location.dart';
-import 'data/meta_sync_prefs.dart';
+import 'data/server_sync_prefs.dart';
 import 'data/secret_store.dart';
 import 'state/providers.dart';
 
@@ -16,13 +16,13 @@ Future<void> main() async {
   await initializeDateFormatting(kLocale);
   final db = AppDatabase.file(await resolveDatabasePath());
   final prefs = await SharedPreferences.getInstance();
-  final metaSyncPrefs = MetaSyncPrefs(prefs, const FlutterSecretStore());
-  await metaSyncPrefs.load();
+  final serverSyncPrefs = ServerSyncPrefs(prefs, const FlutterSecretStore());
+  await serverSyncPrefs.load();
   runApp(ProviderScope(
     overrides: [
       databaseProvider.overrideWithValue(db),
       sharedPreferencesProvider.overrideWithValue(prefs),
-      metaSyncPrefsProvider.overrideWithValue(metaSyncPrefs),
+      serverSyncPrefsProvider.overrideWithValue(serverSyncPrefs),
     ],
     child: const ArnicApp(),
   ));
