@@ -1,8 +1,8 @@
 [Unit]
-Description=Reporte 00:00:semanal de Arnic Finance
+Description=Reporte 20:00 semanal (domingo) de Arnic Finance
 
 [Timer]
-OnCalendar=Sun *-*-* 20
+OnCalendar=Sun *-*-* 20:00:00
 Persistent=true
 
 [Install]
