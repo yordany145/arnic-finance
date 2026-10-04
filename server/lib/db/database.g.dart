@@ -2579,6 +2579,271 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
   }
 }
 
+class $UserConfigsTable extends UserConfigs
+    with TableInfo<$UserConfigsTable, UserConfigRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $UserConfigsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id)',
+    ),
+  );
+  static const VerificationMeta _jsonMeta = const VerificationMeta('json');
+  @override
+  late final GeneratedColumn<String> json = GeneratedColumn<String>(
+    'json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [userId, json, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'user_configs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<UserConfigRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('json')) {
+      context.handle(
+        _jsonMeta,
+        json.isAcceptableOrUnknown(data['json']!, _jsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_jsonMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {userId};
+  @override
+  UserConfigRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return UserConfigRow(
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      json: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}json'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $UserConfigsTable createAlias(String alias) {
+    return $UserConfigsTable(attachedDatabase, alias);
+  }
+}
+
+class UserConfigRow extends DataClass implements Insertable<UserConfigRow> {
+  final String userId;
+  final String json;
+  final int updatedAt;
+  const UserConfigRow({
+    required this.userId,
+    required this.json,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['user_id'] = Variable<String>(userId);
+    map['json'] = Variable<String>(json);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  UserConfigsCompanion toCompanion(bool nullToAbsent) {
+    return UserConfigsCompanion(
+      userId: Value(userId),
+      json: Value(json),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory UserConfigRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return UserConfigRow(
+      userId: serializer.fromJson<String>(json['userId']),
+      json: serializer.fromJson<String>(json['json']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'userId': serializer.toJson<String>(userId),
+      'json': serializer.toJson<String>(json),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  UserConfigRow copyWith({String? userId, String? json, int? updatedAt}) =>
+      UserConfigRow(
+        userId: userId ?? this.userId,
+        json: json ?? this.json,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  UserConfigRow copyWithCompanion(UserConfigsCompanion data) {
+    return UserConfigRow(
+      userId: data.userId.present ? data.userId.value : this.userId,
+      json: data.json.present ? data.json.value : this.json,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UserConfigRow(')
+          ..write('userId: $userId, ')
+          ..write('json: $json, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(userId, json, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is UserConfigRow &&
+          other.userId == this.userId &&
+          other.json == this.json &&
+          other.updatedAt == this.updatedAt);
+}
+
+class UserConfigsCompanion extends UpdateCompanion<UserConfigRow> {
+  final Value<String> userId;
+  final Value<String> json;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const UserConfigsCompanion({
+    this.userId = const Value.absent(),
+    this.json = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  UserConfigsCompanion.insert({
+    required String userId,
+    required String json,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : userId = Value(userId),
+       json = Value(json),
+       updatedAt = Value(updatedAt);
+  static Insertable<UserConfigRow> custom({
+    Expression<String>? userId,
+    Expression<String>? json,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (userId != null) 'user_id': userId,
+      if (json != null) 'json': json,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  UserConfigsCompanion copyWith({
+    Value<String>? userId,
+    Value<String>? json,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return UserConfigsCompanion(
+      userId: userId ?? this.userId,
+      json: json ?? this.json,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (json.present) {
+      map['json'] = Variable<String>(json.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UserConfigsCompanion(')
+          ..write('userId: $userId, ')
+          ..write('json: $json, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ServerDatabase extends GeneratedDatabase {
   _$ServerDatabase(QueryExecutor e) : super(e);
   $ServerDatabaseManager get managers => $ServerDatabaseManager(this);
@@ -2587,6 +2852,7 @@ abstract class _$ServerDatabase extends GeneratedDatabase {
   late final $CategoriesTable categories = $CategoriesTable(this);
   late final $TransactionsTable transactions = $TransactionsTable(this);
   late final $BudgetsTable budgets = $BudgetsTable(this);
+  late final $UserConfigsTable userConfigs = $UserConfigsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2597,6 +2863,7 @@ abstract class _$ServerDatabase extends GeneratedDatabase {
     categories,
     transactions,
     budgets,
+    userConfigs,
   ];
 }
 
@@ -2687,6 +2954,24 @@ final class $$UsersTableReferences
     ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_budgetsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$UserConfigsTable, List<UserConfigRow>>
+  _userConfigsRefsTable(_$ServerDatabase db) => MultiTypedResultKey.fromTable(
+    db.userConfigs,
+    aliasName: 'users__id__user_configs__user_id',
+  );
+
+  $$UserConfigsTableProcessedTableManager get userConfigsRefs {
+    final manager = $$UserConfigsTableTableManager(
+      $_db,
+      $_db.userConfigs,
+    ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_userConfigsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -2808,6 +3093,31 @@ class $$UsersTableFilterComposer
           }) => $$BudgetsTableFilterComposer(
             $db: $db,
             $table: $db.budgets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> userConfigsRefs(
+    Expression<bool> Function($$UserConfigsTableFilterComposer f) f,
+  ) {
+    final $$UserConfigsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.userConfigs,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UserConfigsTableFilterComposer(
+            $db: $db,
+            $table: $db.userConfigs,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -2962,6 +3272,31 @@ class $$UsersTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> userConfigsRefs<T extends Object>(
+    Expression<T> Function($$UserConfigsTableAnnotationComposer a) f,
+  ) {
+    final $$UserConfigsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.userConfigs,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UserConfigsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.userConfigs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$UsersTableTableManager
@@ -2982,6 +3317,7 @@ class $$UsersTableTableManager
             bool categoriesRefs,
             bool transactionsRefs,
             bool budgetsRefs,
+            bool userConfigsRefs,
           })
         > {
   $$UsersTableTableManager(_$ServerDatabase db, $UsersTable table)
@@ -3033,6 +3369,7 @@ class $$UsersTableTableManager
                 categoriesRefs = false,
                 transactionsRefs = false,
                 budgetsRefs = false,
+                userConfigsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -3041,6 +3378,7 @@ class $$UsersTableTableManager
                     if (categoriesRefs) db.categories,
                     if (transactionsRefs) db.transactions,
                     if (budgetsRefs) db.budgets,
+                    if (userConfigsRefs) db.userConfigs,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -3121,6 +3459,27 @@ class $$UsersTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (userConfigsRefs)
+                        await $_getPrefetchedData<
+                          UserRow,
+                          $UsersTable,
+                          UserConfigRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._userConfigsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).userConfigsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -3146,6 +3505,7 @@ typedef $$UsersTableProcessedTableManager =
         bool categoriesRefs,
         bool transactionsRefs,
         bool budgetsRefs,
+        bool userConfigsRefs,
       })
     >;
 typedef $$AccountsTableCreateCompanionBuilder =
@@ -5294,6 +5654,285 @@ typedef $$BudgetsTableProcessedTableManager =
       BudgetRow,
       PrefetchHooks Function({bool userId, bool categoryId})
     >;
+typedef $$UserConfigsTableCreateCompanionBuilder =
+    UserConfigsCompanion Function({
+      required String userId,
+      required String json,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$UserConfigsTableUpdateCompanionBuilder =
+    UserConfigsCompanion Function({
+      Value<String> userId,
+      Value<String> json,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+final class $$UserConfigsTableReferences
+    extends BaseReferences<_$ServerDatabase, $UserConfigsTable, UserConfigRow> {
+  $$UserConfigsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $UsersTable _userIdTable(_$ServerDatabase db) =>
+      db.users.createAlias('user_configs__user_id__users__id');
+
+  $$UsersTableProcessedTableManager get userId {
+    final $_column = $_itemColumn<String>('user_id')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_userIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$UserConfigsTableFilterComposer
+    extends Composer<_$ServerDatabase, $UserConfigsTable> {
+  $$UserConfigsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get json => $composableBuilder(
+    column: $table.json,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$UsersTableFilterComposer get userId {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$UserConfigsTableOrderingComposer
+    extends Composer<_$ServerDatabase, $UserConfigsTable> {
+  $$UserConfigsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get json => $composableBuilder(
+    column: $table.json,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$UsersTableOrderingComposer get userId {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$UserConfigsTableAnnotationComposer
+    extends Composer<_$ServerDatabase, $UserConfigsTable> {
+  $$UserConfigsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get json =>
+      $composableBuilder(column: $table.json, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$UsersTableAnnotationComposer get userId {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$UserConfigsTableTableManager
+    extends
+        RootTableManager<
+          _$ServerDatabase,
+          $UserConfigsTable,
+          UserConfigRow,
+          $$UserConfigsTableFilterComposer,
+          $$UserConfigsTableOrderingComposer,
+          $$UserConfigsTableAnnotationComposer,
+          $$UserConfigsTableCreateCompanionBuilder,
+          $$UserConfigsTableUpdateCompanionBuilder,
+          (UserConfigRow, $$UserConfigsTableReferences),
+          UserConfigRow,
+          PrefetchHooks Function({bool userId})
+        > {
+  $$UserConfigsTableTableManager(_$ServerDatabase db, $UserConfigsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$UserConfigsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$UserConfigsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$UserConfigsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> userId = const Value.absent(),
+                Value<String> json = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => UserConfigsCompanion(
+                userId: userId,
+                json: json,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String userId,
+                required String json,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => UserConfigsCompanion.insert(
+                userId: userId,
+                json: json,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$UserConfigsTable, UserConfigRow>(table),
+                  $$UserConfigsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({userId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (userId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.userId,
+                                referencedTable: $$UserConfigsTableReferences
+                                    ._userIdTable(db),
+                                referencedColumn: $$UserConfigsTableReferences
+                                    ._userIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$UserConfigsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ServerDatabase,
+      $UserConfigsTable,
+      UserConfigRow,
+      $$UserConfigsTableFilterComposer,
+      $$UserConfigsTableOrderingComposer,
+      $$UserConfigsTableAnnotationComposer,
+      $$UserConfigsTableCreateCompanionBuilder,
+      $$UserConfigsTableUpdateCompanionBuilder,
+      (UserConfigRow, $$UserConfigsTableReferences),
+      UserConfigRow,
+      PrefetchHooks Function({bool userId})
+    >;
 
 class $ServerDatabaseManager {
   final _$ServerDatabase _db;
@@ -5308,4 +5947,6 @@ class $ServerDatabaseManager {
       $$TransactionsTableTableManager(_db, _db.transactions);
   $$BudgetsTableTableManager get budgets =>
       $$BudgetsTableTableManager(_db, _db.budgets);
+  $$UserConfigsTableTableManager get userConfigs =>
+      $$UserConfigsTableTableManager(_db, _db.userConfigs);
 }

@@ -3,6 +3,7 @@ import 'package:shelf_router/shelf_router.dart';
 
 import 'auth_middleware.dart';
 import 'db/database.dart';
+import 'routes/config_routes.dart';
 import 'routes/movement_routes.dart';
 import 'routes/reference_routes.dart';
 import 'routes/setup_routes.dart';
@@ -30,6 +31,7 @@ Handler buildHandler(ServerDatabase db, {required String setupToken}) {
 
   final protectedRoutes = Router()
     ..mount('/', movementRoutes(db).call)
+    ..mount('/', configRoutes(db).call)
     ..mount('/', referenceRoutes(db).call)
     ..mount('/', summaryRoutes(db).call)
     ..mount('/', syncRoutes(db).call);

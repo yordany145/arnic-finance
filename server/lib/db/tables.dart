@@ -110,3 +110,17 @@ class Budgets extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
+
+/// Configuración por usuario que la app edita y otros servicios (el puente de correo) leen:
+/// límites y días de corte/pago de las tarjetas, etc. Un solo JSON por usuario; el esquema de
+/// `cards` se valida en lib/util/validation.dart. `updatedAt` es la hora de la edición en el
+/// cliente (gana la más reciente, ver routes/config_routes.dart).
+@DataClassName('UserConfigRow')
+class UserConfigs extends Table {
+  TextColumn get userId => text().references(Users, #id)();
+  TextColumn get json => text()();
+  IntColumn get updatedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {userId};
+}

@@ -7,7 +7,7 @@ import 'tables.dart';
 
 part 'database.g.dart';
 
-@DriftDatabase(tables: [Users, Accounts, Categories, Transactions, Budgets])
+@DriftDatabase(tables: [Users, Accounts, Categories, Transactions, Budgets, UserConfigs])
 class ServerDatabase extends _$ServerDatabase {
   ServerDatabase(super.executor);
 
@@ -24,11 +24,15 @@ class ServerDatabase extends _$ServerDatabase {
   factory ServerDatabase.inMemory() => ServerDatabase(NativeDatabase.memory());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          // v2: configuración por usuario (tarjetas). Las bases creadas antes no la tienen.
+          if (from < 2) await m.createTable(userConfigs);
+        },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
         },

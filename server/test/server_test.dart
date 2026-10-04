@@ -95,6 +95,49 @@ void main() {
     });
   });
 
+  group('configuración de tarjetas', () {
+    Future<http.Response> put(String key, Object body) => http.put(Uri.parse('$baseUrl/v1/config'),
+        headers: {'authorization': 'Bearer $key'}, body: jsonEncode(body));
+
+    test('sin configuración: vacía y updatedAt 0', () async {
+      final key = await setupAndGetApiKey();
+      final res = await get('/v1/config', headers: {'authorization': 'Bearer $key'});
+      expect(res.statusCode, 200);
+      expect(jsonDecode(res.body), {'updatedAt': 0, 'config': <String, Object?>{}});
+    });
+
+    test('guardar y leer; una escritura más vieja da 409 y no pisa la nueva', () async {
+      final key = await setupAndGetApiKey();
+      final cards = {'cards': [{'accountId': 'a1', 'limitMinor': 1500000, 'cutDay': 15, 'dueDay': 5}]};
+      expect((await put(key, {'config': cards, 'updatedAt': 2000})).statusCode, 200);
+
+      final stale = await put(key, {'config': {'cards': []}, 'updatedAt': 1000});
+      expect(stale.statusCode, 409);
+      expect(jsonDecode(stale.body)['updatedAt'], 2000);
+
+      final read = jsonDecode((await get('/v1/config', headers: {'authorization': 'Bearer $key'})).body);
+      expect(read, {'updatedAt': 2000, 'config': cards});
+    });
+
+    test('rechaza días fuera de 1–31, límites negativos, tarjetas repetidas y cuerpos mal formados', () async {
+      final key = await setupAndGetApiKey();
+      Future<int> status(Object cards) async => (await put(key, {'config': {'cards': cards}, 'updatedAt': 5000})).statusCode;
+      expect(await status([{'accountId': 'a', 'cutDay': 32}]), 400);
+      expect(await status([{'accountId': 'a', 'dueDay': 0}]), 400);
+      expect(await status([{'accountId': 'a', 'limitMinor': -1}]), 400);
+      expect(await status([{'accountId': 'a'}, {'accountId': 'a'}]), 400);
+      expect(await status([{'limitMinor': 5}]), 400);
+      expect(await status('no es lista'), 400);
+      expect((await put(key, {'config': 'x', 'updatedAt': 5000})).statusCode, 400);
+      expect((await put(key, {'config': {}, 'updatedAt': 'ayer'})).statusCode, 400);
+      expect(await status([{'accountId': 'a', 'limitMinor': null, 'cutDay': null, 'dueDay': 31}]), 200);
+    });
+
+    test('exige API key', () async {
+      expect((await get('/v1/config')).statusCode, 401);
+    });
+  });
+
   group('autenticación de rutas protegidas', () {
     test('sin Authorization: 401', () async {
       expect((await get('/v1/categories')).statusCode, 401);
