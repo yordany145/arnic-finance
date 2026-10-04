@@ -1,0 +1,7 @@
+[Unit]
+Description=Arnic Finance: reporte mensual en Excel por Telegram
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/arnic-bridge
+ExecStart=/usr/bin/python3 -m arnic_bridge report monthly

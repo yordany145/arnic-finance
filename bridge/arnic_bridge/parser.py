@@ -199,4 +199,6 @@ def merchant_key(text: str) -> str:
     base = text.split(" (tarjeta")[0]
     base = re.sub(r"[^A-Z ]", " ", _strip_accents(base).upper())
     tokens = [t for t in base.split() if t not in ("DOM", "PENDING")]
+    if len(tokens) > 1 and tokens[-1] in _COUNTRIES:
+        tokens.pop()  # Banreservas termina el comercio con el país (LUX, USA…); BHD no: sin esto el mismo comercio salía con dos claves
     return " ".join(tokens)

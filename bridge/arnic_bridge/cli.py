@@ -189,7 +189,7 @@ def _subscriptions(cfg, snapshot, mail_days: int = 0) -> list:
             except NotAPurchase:
                 pass
         events = list({(k, w // 60000): (k, label, a, w) for k, label, a, w in events}.values())
-    return insights.detect_subscriptions(events, _tz(cfg))
+    return insights.detect_subscriptions(events, _tz(cfg), int(time.time() * 1000))
 
 
 def _upcoming_subscription_lines(subs: list, now: datetime, sym: str, within_days: int = 3) -> list:

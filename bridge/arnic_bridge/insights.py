@@ -56,24 +56,36 @@ def _same_day_next_month(ms: int, tz) -> int:
     return int(d.replace(year=year, month=month, day=min(d.day, calendar.monthrange(year, month)[1])).timestamp() * 1000)
 
 
-def detect_subscriptions(events: list, tz=timezone.utc) -> list:
-    """events: [(clave, etiqueta, monto_minor, cuando_ms)]. Un cobro mensual = ≥2 cargos con ~30 días entre ellos y monto parecido.
-    El próximo cobro se espera el mismo día del mes siguiente (en la zona `tz`)."""
+def detect_subscriptions(events: list, tz=timezone.utc, now_ms: int | None = None) -> list:
+    """events: [(clave, etiqueta, monto_minor, cuando_ms)].
+
+    Un cobro mensual es una cadena de cargos que termina en el último de ese comercio: cada uno ~30 días (25–35) después
+    del anterior y con un monto parecido (±20 %). Las compras sueltas que no encajan en la cadena —otro monto, otra fecha—
+    se ignoran en vez de estropear la detección. El próximo cobro se espera el mismo día del mes siguiente (zona `tz`).
+    Con `now_ms`, se descartan las que llevan más de una semana de retraso (ya no se cobran)."""
     day = 86_400_000
     groups: dict = {}
     for key, label, amount, when in events:
         groups.setdefault(key, []).append((when, amount, label))
     found = []
-    for key, items in groups.items():
+    for items in groups.values():
         items.sort()
-        if len(items) < 2:
+        head = items[-1]
+        chain = [head]
+        while True:
+            candidates = [it for it in items if 25 <= (head[0] - it[0]) / day <= 35 and max(it[1], head[1]) <= 1.2 * min(it[1], head[1])]
+            if not candidates:
+                break
+            head = min(candidates, key=lambda it: abs((head[0] - it[0]) / day - 30))
+            chain.append(head)
+        if len(chain) < 2:
             continue
-        gaps = [(b[0] - a[0]) / day for a, b in zip(items, items[1:])]
-        amounts = [a for _, a, _ in items]
-        if 25 <= median(gaps) <= 35 and max(amounts) <= 1.2 * min(amounts):
-            last_when, last_amount, label = items[-1]
-            found.append({"label": label, "amount": last_amount, "every_days": round(median(gaps)), "last": last_when,
-                          "next": _same_day_next_month(last_when, tz)})
+        last_when, last_amount, label = chain[0]
+        next_ms = _same_day_next_month(last_when, tz)
+        if now_ms is not None and next_ms < now_ms - 7 * day:
+            continue
+        gaps = [(a[0] - b[0]) / day for a, b in zip(chain, chain[1:])]
+        found.append({"label": label, "amount": last_amount, "every_days": round(median(gaps)), "last": last_when, "next": next_ms, "charges": len(chain)})
     return sorted(found, key=lambda s: s["next"])
 
 

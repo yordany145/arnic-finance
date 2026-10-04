@@ -317,6 +317,9 @@ class Insights(unittest.TestCase):
     def test_merchant_key(self):
         self.assertEqual(merchant_key("ECOPETROLEO LA VEGA LA VEGA DOM (tarjeta ••2110)"), "ECOPETROLEO LA VEGA LA VEGA")
         self.assertEqual(merchant_key("PAYPAL *SPOTIFY*P47346"), "PAYPAL SPOTIFY P")
+        # el mismo comercio visto por Banreservas (con número y país) y por BHD tiene la misma clave
+        self.assertEqual(merchant_key("PAYPAL *MIKROWISP 35314369001 LUX"), merchant_key("PAYPAL *MIKROWISP"))
+        self.assertEqual(merchant_key("USA"), "USA")  # un comercio que solo se llama como un país no se vacía
 
     def test_subscriptions(self):
         ev = [("SPOTIFY", "PAYPAL *SPOTIFY", 21798, _ms(2026, 8, 23)), ("SPOTIFY", "PAYPAL *SPOTIFY", 21798, _ms(2026, 9, 23)),
@@ -324,7 +327,18 @@ class Insights(unittest.TestCase):
               ("UNA", "UNA SOLA VEZ", 5000, _ms(2026, 9, 3))]
         found = insights.detect_subscriptions(ev, TZ)
         self.assertEqual([s["label"] for s in found], ["PAYPAL *SPOTIFY"])
+        # compras sueltas de otro monto en medio no estropean un cobro mensual real
+        noisy = [("HOST", "PAYPAL *HOSTINGER", 121142, _ms(2026, 8, 15)), ("HOST", "PAYPAL *HOSTINGER", 252018, _ms(2026, 9, 3)),
+                 ("HOST", "PAYPAL *HOSTINGER", 62018, _ms(2026, 6, 15)), ("HOST", "PAYPAL *HOSTINGER", 121142, _ms(2026, 9, 15))]
+        got = insights.detect_subscriptions(noisy, TZ)
+        self.assertEqual((len(got), got[0]["charges"], got[0]["amount"]), (1, 2, 121142))
+        # tres meses seguidos: la cadena los cuenta
+        three = [("N", "NETFLIX", 79900, _ms(2026, 7, 5)), ("N", "NETFLIX", 79900, _ms(2026, 8, 5)), ("N", "NETFLIX", 79900, _ms(2026, 9, 5))]
+        self.assertEqual(insights.detect_subscriptions(three, TZ)[0]["charges"], 3)
         self.assertEqual(datetime.fromtimestamp(found[0]["next"] / 1000, TZ).date().isoformat(), "2026-10-23")
+        # una suscripción que dejó de cobrarse hace meses no se propone como "próximo cobro" pasado
+        self.assertEqual(insights.detect_subscriptions(ev, TZ, _ms(2026, 12, 20)), [])
+        self.assertEqual(len(insights.detect_subscriptions(ev, TZ, _ms(2026, 10, 1))), 1)
 
 
 class Reports(unittest.TestCase):

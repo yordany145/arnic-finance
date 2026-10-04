@@ -1,0 +1,10 @@
+[Unit]
+Description=Reporte mensual (día 1, 08:00) de Arnic Finance
+
+[Timer]
+# El día 1 se manda el Excel del mes que acaba de cerrar. Zona horaria explícita, como los demás.
+OnCalendar=*-*-01 08:00:00 America/Santo_Domingo
+Persistent=true
+
+[Install]
+WantedBy=timers.target

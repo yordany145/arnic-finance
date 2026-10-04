@@ -113,6 +113,8 @@ class SettingsScreen extends ConsumerWidget {
           const _VersionCaption(),
           ListTile(leading: const Icon(Icons.category_outlined), title: const Text('Categorías'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/categories')),
           ListTile(leading: const Icon(Icons.account_balance_wallet_outlined), title: const Text('Cuentas'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/accounts')),
+          ListTile(leading: const Icon(Icons.credit_card_outlined), title: const Text('Tarjetas de crédito'), subtitle: const Text('Límite, día de corte y día de pago'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/cards')),
+          ListTile(leading: const Icon(Icons.bar_chart_outlined), title: const Text('Reportes y gráficas'), subtitle: const Text('Gasto por categoría y por mes'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/reports')),
           ListTile(leading: const Icon(Icons.savings_outlined), title: const Text('Presupuestos'), subtitle: const Text('Límites mensuales y metas de ahorro'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/budgets')),
           ListTile(leading: const Icon(Icons.payments_outlined), title: const Text('Moneda'), subtitle: Text('Símbolo: $currency'), onTap: () => _editCurrency(context, ref, currency)),
           const Divider(height: 32),

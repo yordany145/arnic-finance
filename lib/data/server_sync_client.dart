@@ -20,6 +20,12 @@ class PullResult {
   final SyncRows rows;
 }
 
+class RemoteConfig {
+  const RemoteConfig({required this.updatedAt, required this.config});
+  final int updatedAt;
+  final Map<String, dynamic> config;
+}
+
 /// Cliente HTTP del servidor opcional en `server/` (ver docs/API.md). Recibe
 /// un `http.Client` inyectable para poder probarlo sin red real.
 class ServerSyncClient {
@@ -68,6 +74,27 @@ class ServerSyncClient {
     );
     if (res.statusCode != 200) throw ServerSyncException(_errorMessage(res));
     return (jsonDecode(res.body) as Map<String, dynamic>)['serverTimeMs'] as int;
+  }
+
+  /// Configuración guardada en el servidor (tarjetas). `null` si el servidor es una versión anterior sin `/v1/config`.
+  Future<RemoteConfig?> getConfig({required String serverUrl, required String apiKey}) async {
+    final res = await _send(() => _http.get(Uri.parse('${_normalize(serverUrl)}/v1/config'), headers: _authHeaders(apiKey)));
+    if (res.statusCode == 404) return null;
+    if (res.statusCode != 200) throw ServerSyncException(_errorMessage(res));
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return RemoteConfig(updatedAt: body['updatedAt'] as int? ?? 0, config: (body['config'] as Map?)?.cast<String, dynamic>() ?? const {});
+  }
+
+  /// `true` si el servidor la guardó; `false` si ya tenía una más reciente (409).
+  Future<bool> putConfig({required String serverUrl, required String apiKey, required Map<String, dynamic> config, required int updatedAt}) async {
+    final res = await _send(() => _http.put(
+          Uri.parse('${_normalize(serverUrl)}/v1/config'),
+          headers: _authHeaders(apiKey),
+          body: jsonEncode({'config': config, 'updatedAt': updatedAt}),
+        ));
+    if (res.statusCode == 200) return true;
+    if (res.statusCode == 409 || res.statusCode == 404) return false;
+    throw ServerSyncException(_errorMessage(res));
   }
 
   /// Centraliza el timeout y traduce los errores de red/DNS/certificado a un

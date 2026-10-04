@@ -3,5 +3,5 @@ Description=Arnic Finance: leer avisos del banco y registrar gastos
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/yordany/Documentos/GitHub/arnic-finance/bridge
+WorkingDirectory=%h/arnic-bridge
 ExecStart=/usr/bin/python3 -m arnic_bridge ingest

@@ -1,5 +1,7 @@
 import 'package:drift/drift.dart';
 
+import '../domain/card_config.dart';
+import 'card_settings_store.dart';
 import 'database.dart';
 import 'server_sync_client.dart';
 import 'server_sync_prefs.dart';
@@ -9,11 +11,13 @@ import 'server_sync_prefs.dart';
 /// dispositivos: basta con comparar `updated_at` contra el último cursor
 /// guardado (ver docs/API.md, sección "Protocolo de sincronización").
 class ServerSyncService {
-  ServerSyncService(this._db, this._client, this._prefs);
+  ServerSyncService(this._db, this._client, this._prefs, {this.cardStore, this.onConfigChanged});
 
   final AppDatabase _db;
   final ServerSyncClient _client;
   final ServerSyncPrefs _prefs;
+  final CardSettingsStore? cardStore;
+  final void Function()? onConfigChanged;
 
   Future<void> syncNow() async {
     if (!_prefs.isConfigured) throw ServerSyncException('No hay un servidor configurado todavía.');
@@ -21,6 +25,27 @@ class ServerSyncService {
     final apiKey = _prefs.apiKey!;
     await _push(serverUrl, apiKey);
     await _pull(serverUrl, apiKey);
+    await _syncCardSettings(serverUrl, apiKey);
+  }
+
+  /// Gana la edición más reciente. Un fallo aquí no debe hacer fallar la sincronización de movimientos
+  /// (que ya terminó bien): la configuración se reintenta en la próxima.
+  Future<void> _syncCardSettings(String serverUrl, String apiKey) async {
+    final store = cardStore;
+    if (store == null) return;
+    try {
+      final remote = await _client.getConfig(serverUrl: serverUrl, apiKey: apiKey);
+      if (remote == null) return;
+      final local = store.read();
+      if (remote.updatedAt > local.updatedAt) {
+        await store.write(CardSettings.fromServerConfig(remote.config, remote.updatedAt));
+        onConfigChanged?.call();
+      } else if (local.updatedAt > remote.updatedAt) {
+        await _client.putConfig(serverUrl: serverUrl, apiKey: apiKey, config: local.toServerConfig(), updatedAt: local.updatedAt);
+      }
+    } on ServerSyncException {
+      // ver comentario de arriba
+    }
   }
 
   /// Reenvía y relee todo desde cero (p. ej. tras cambiar de servidor o si el

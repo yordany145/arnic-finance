@@ -1,7 +1,7 @@
 [Unit]
-Description=Arnic Finance: reporte 00:00:diario por Telegram
+Description=Arnic Finance: reporte diario por Telegram
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/yordany/Documentos/GitHub/arnic-finance/bridge
+WorkingDirectory=%h/arnic-bridge
 ExecStart=/usr/bin/python3 -m arnic_bridge report daily

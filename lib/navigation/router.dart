@@ -6,9 +6,11 @@ import '../ui/screens/accounts_screen.dart';
 import '../ui/screens/assistant_screen.dart';
 import '../ui/screens/budgets_screen.dart';
 import '../ui/screens/add_movement_screen.dart';
+import '../ui/screens/cards_screen.dart';
 import '../ui/screens/categories_screen.dart';
 import '../ui/screens/history_screen.dart';
 import '../ui/screens/home_screen.dart';
+import '../ui/screens/reports_screen.dart';
 import '../ui/screens/settings_screen.dart';
 import '../ui/shell.dart';
 
@@ -36,6 +38,8 @@ GoRouter buildRouter() => GoRouter(
         GoRoute(path: '/categories', builder: (_, _) => const CategoriesScreen()),
         GoRoute(path: '/accounts', builder: (_, _) => const AccountsScreen()),
         GoRoute(path: '/budgets', builder: (_, _) => const BudgetsScreen()),
+        GoRoute(path: '/cards', builder: (_, _) => const CardsScreen()),
+        GoRoute(path: '/reports', builder: (_, _) => const ReportsScreen()),
       ],
       errorBuilder: (_, _) => const Scaffold(body: Center(child: Text('Pantalla no encontrada'))),
     );

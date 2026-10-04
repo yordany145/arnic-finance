@@ -130,6 +130,20 @@ Listan `{id, name, icon, type|kind}` — úsalos para resolver nombres antes de
 llamar a `/v1/movements`, o para que un servicio pueda
 mostrarte las opciones.
 
+### `GET /v1/config` y `PUT /v1/config`
+
+Configuración que edita la app y lee el puente de correo: límite y días de corte y de pago de cada tarjeta.
+
+```jsonc
+// GET → 200
+{"updatedAt": 1790000000000, "config": {"cards": [{"accountId": "...", "limitMinor": 1500000, "cutDay": 15, "dueDay": 5}]}}
+
+// PUT  {"config": {...}, "updatedAt": <hora de la edición en ms>}
+// 200 {"updatedAt": ...} · 409 si el servidor ya tiene una edición más reciente · 400 si no valida
+```
+
+`cutDay`/`dueDay` son `null` o 1–31; `limitMinor` es un entero ≥ 0 en centavos. Gana la edición más reciente.
+
 ### `GET /v1/sync?since=<epochMs>` y `POST /v1/sync`
 
 Las usa la app para sincronizarse; no hace falta llamarlas a mano salvo que

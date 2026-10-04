@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/money.dart';
+import '../data/card_settings_store.dart';
 import '../data/app_lock_prefs.dart';
 import '../data/database.dart';
 import '../data/server_sync_client.dart';
@@ -13,6 +14,7 @@ import '../data/repositories/drift_category_repository.dart';
 import '../data/repositories/drift_movement_repository.dart';
 import '../data/repositories/drift_settings_repository.dart';
 import '../data/update_service.dart';
+import '../domain/card_config.dart';
 import '../domain/budget.dart';
 import '../domain/budget_alert_service.dart';
 import '../domain/date_range.dart';
@@ -72,8 +74,57 @@ final serverSyncClientProvider = Provider<ServerSyncClient>((ref) {
 });
 
 final serverSyncServiceProvider = Provider<ServerSyncService>(
-  (ref) => ServerSyncService(ref.watch(databaseProvider), ref.watch(serverSyncClientProvider), ref.watch(serverSyncPrefsProvider)),
+  (ref) => ServerSyncService(
+    ref.watch(databaseProvider),
+    ref.watch(serverSyncClientProvider),
+    ref.watch(serverSyncPrefsProvider),
+    cardStore: ref.watch(cardSettingsStoreProvider),
+    onConfigChanged: () => ref.read(cardSettingsProvider.notifier).reload(),
+  ),
 );
+
+// ── Tarjetas de crédito ──────────────────────────────────────────────────────
+final cardSettingsStoreProvider = Provider<CardSettingsStore>((ref) => CardSettingsStore(ref.watch(sharedPreferencesProvider)));
+
+class CardSettingsNotifier extends Notifier<CardSettings> {
+  @override
+  CardSettings build() => ref.watch(cardSettingsStoreProvider).read();
+
+  /// Guarda la edición de una tarjeta (queda con la hora actual: gana al sincronizar).
+  Future<void> save(CardConfig card) async {
+    final next = state.withCard(card, DateTime.now().millisecondsSinceEpoch);
+    state = next;
+    await ref.read(cardSettingsStoreProvider).write(next);
+  }
+
+  /// Relee lo guardado (p. ej. tras bajar un cambio del servidor).
+  void reload() => state = ref.read(cardSettingsStoreProvider).read();
+}
+
+final cardSettingsProvider = NotifierProvider<CardSettingsNotifier, CardSettings>(CardSettingsNotifier.new);
+
+/// Consumo de una tarjeta en su ciclo actual. No descuenta pagos: mide lo consumido en el ciclo frente al límite.
+class CardUsage {
+  const CardUsage({required this.spentMinor, required this.range, this.limitMinor, this.due});
+
+  final int spentMinor;
+  final int? limitMinor;
+  final DateRange range;
+  final DateTime? due;
+
+  double? get ratio => limitMinor == null || limitMinor == 0 ? null : spentMinor / limitMinor!;
+  int? get availableMinor => limitMinor == null ? null : (limitMinor! - spentMinor).clamp(0, limitMinor!).toInt();
+}
+
+final cardUsageProvider = StreamProvider.family<CardUsage, String>((ref, accountId) {
+  final config = ref.watch(cardSettingsProvider).forAccount(accountId);
+  final now = ref.watch(nowProvider);
+  final range = cardCycleRange(now, config?.cutDay);
+  return ref
+      .watch(movementRepositoryProvider)
+      .watchSummary(MovementFilter(accountId: accountId, range: range))
+      .map((s) => CardUsage(spentMinor: s.expenseMinor, limitMinor: config?.limitMinor, range: range, due: nextDueDate(now, config?.dueDay)));
+});
 
 /// Igual que `AppLockEnabledNotifier`: estado en memoria sembrado desde las
 /// preferencias, para que la UI reaccione al toggle sin reconstruir la pantalla.
@@ -173,6 +224,13 @@ final balanceSummaryProvider =
 final monthSummaryProvider = StreamProvider<PeriodSummary>((ref) {
   final range = resolveRange(PeriodPreset.month, ref.watch(nowProvider));
   return ref.watch(movementRepositoryProvider).watchSummary(MovementFilter(range: range));
+});
+
+/// Movimientos de los últimos 6 meses (mes actual incluido), para la pantalla de reportes.
+final reportMovementsProvider = StreamProvider<List<Movement>>((ref) {
+  final now = ref.watch(nowProvider);
+  final range = DateRange(DateTime(now.year, now.month - 5), DateTime(now.year, now.month + 1));
+  return ref.watch(movementRepositoryProvider).watch(MovementFilter(range: range));
 });
 
 final recentMovementsProvider = StreamProvider<List<Movement>>(
