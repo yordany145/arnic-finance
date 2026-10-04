@@ -5,9 +5,9 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from arnic_bridge import budgets, ledger, mail_source
+from arnic_bridge import budgets, cards as cardlib, export, insights, ledger, mail_source
 from arnic_bridge.config import DEFAULT_CATEGORY_RULES
-from arnic_bridge.parser import NotAPurchase, categorize, parse_amount, parse_email, parse_purchase
+from arnic_bridge.parser import NotAPurchase, categorize, foreign_country, merchant_key, parse_amount, parse_email, parse_purchase, parse_qik_deposit
 
 
 class Parser(unittest.TestCase):
@@ -108,21 +108,6 @@ class Cards(unittest.TestCase):
         self.assertEqual(len(added), 1)
         self.assertEqual(added[0][4], "Tarjeta BHD")
 
-    def test_usage_and_limit_alerts(self):
-        tz = ZoneInfo("America/Santo_Domingo")
-        now = datetime(2026, 10, 15, 12, tzinfo=tz)
-        t = int(datetime(2026, 10, 10, tzinfo=tz).timestamp() * 1000)
-        snap = {"categories": [], "budgets": [], "accounts": [{"id": "a1", "name": "Tarjeta Banreservas"}, {"id": "a2", "name": "Tarjeta BHD"}],
-                "transactions": [{"type": "expense", "amountMinor": 1260000, "accountId": "a1", "categoryId": "c", "occurredAt": t},
-                                 {"type": "expense", "amountMinor": 500000, "accountId": "a2", "categoryId": "c", "occurredAt": t}]}
-        cards = {"banreservas": {"account": "Tarjeta Banreservas", "limit": 15000}, "bhd": {"account": "Tarjeta BHD", "limit": 30000}}
-        usage = {b: (spent, lim) for b, _, spent, lim in budgets.card_usage(snap, now, cards)}
-        self.assertEqual(usage, {"banreservas": (1260000, 1500000), "bhd": (500000, 3000000)})
-        alerts = budgets.card_alerts(snap, now, cards, "RD$", set().__contains__)
-        self.assertEqual(len(alerts), 1)  # solo Banreservas pasa del 80% (84%)
-        self.assertIn("84%", alerts[0][1])
-        self.assertIn("Tarjeta Banreservas", budgets.report(snap, now, "RD$", 7, "semanal", cards))
-
 
 class Budgets(unittest.TestCase):
     NOW = datetime(2026, 10, 15, 12, tzinfo=ZoneInfo("America/Santo_Domingo"))
@@ -197,6 +182,184 @@ class Ledger(unittest.TestCase):
         rows, hits = ledger.plan_delete(self.SNAP, ["prueba"], now=9)
         self.assertEqual([t["id"] for t in hits], ["t1"])
         self.assertEqual(rows["transactions"][0]["deletedAt"], 9)
+
+
+TZ = ZoneInfo("America/Santo_Domingo")
+
+
+def _ms(y, m, d, h=12):
+    return int(datetime(y, m, d, h, tzinfo=TZ).timestamp() * 1000)
+
+
+class CardCycles(unittest.TestCase):
+    def test_cycle_bounds(self):
+        from datetime import date
+        self.assertEqual(cardlib.cycle_bounds(date(2026, 10, 3), 15), (date(2026, 9, 16), date(2026, 10, 15)))
+        self.assertEqual(cardlib.cycle_bounds(date(2026, 10, 15), 15), (date(2026, 9, 16), date(2026, 10, 15)))  # el día del corte aún es del ciclo viejo
+        self.assertEqual(cardlib.cycle_bounds(date(2026, 10, 16), 15), (date(2026, 10, 16), date(2026, 11, 15)))
+        self.assertEqual(cardlib.cycle_bounds(date(2026, 12, 20), 15), (date(2026, 12, 16), date(2027, 1, 15)))  # cruza de año
+        self.assertEqual(cardlib.cycle_bounds(date(2026, 3, 5), 31), (date(2026, 3, 1), date(2026, 3, 31)))  # corte 31: el de febrero fue el 28, así que marzo empieza el 1
+        self.assertEqual(cardlib.cycle_bounds(date(2026, 10, 3), None), (date(2026, 10, 1), date(2026, 10, 31)))
+
+    def test_next_due(self):
+        from datetime import date
+        self.assertEqual(cardlib.next_due(date(2026, 10, 3), 5), date(2026, 10, 5))
+        self.assertEqual(cardlib.next_due(date(2026, 10, 6), 5), date(2026, 11, 5))
+        self.assertEqual(cardlib.next_due(date(2026, 1, 31), 30), date(2026, 2, 28))
+        self.assertIsNone(cardlib.next_due(date(2026, 10, 3), None))
+
+    SNAP = {"accounts": [{"id": "a1", "name": "Tarjeta Banreservas"}, {"id": "a2", "name": "Tarjeta BHD"}], "categories": [], "budgets": [],
+            "transactions": [{"type": "expense", "amountMinor": 1260000, "accountId": "a1", "categoryId": "c", "occurredAt": _ms(2026, 10, 10)},
+                             {"type": "expense", "amountMinor": 999900, "accountId": "a1", "categoryId": "c", "occurredAt": _ms(2026, 9, 10)},  # ciclo anterior
+                             {"type": "expense", "amountMinor": 500000, "accountId": "a2", "categoryId": "c", "occurredAt": _ms(2026, 10, 10)}]}
+    LOCAL = {"banreservas": {"account": "Tarjeta Banreservas", "limit": 15000, "last4": ["2110"]}, "bhd": {"account": "Tarjeta BHD", "limit": 30000, "last4": ["8866"]}}
+
+    def test_server_config_overrides_local(self):
+        server = {"cards": [{"accountId": "a1", "limitMinor": 2000000, "cutDay": 20, "dueDay": 8}]}
+        eff = cardlib.effective_cards(self.LOCAL, self.SNAP, server)
+        self.assertEqual((eff["banreservas"]["limit_minor"], eff["banreservas"]["cut_day"], eff["banreservas"]["due_day"]), (2000000, 20, 8))
+        self.assertEqual((eff["bhd"]["limit_minor"], eff["bhd"]["cut_day"]), (3000000, None))  # sin dato en el servidor: lo local
+        self.assertEqual(cardlib.effective_cards(self.LOCAL, self.SNAP, None)["banreservas"]["limit_minor"], 1500000)
+
+    def test_usage_by_cycle_and_alerts(self):
+        server = {"cards": [{"accountId": "a1", "limitMinor": 1500000, "cutDay": 15, "dueDay": 5}]}
+        now = datetime(2026, 10, 15, 12, tzinfo=TZ)
+        rows = {r["bank"]: r for r in cardlib.usage(self.SNAP, now, cardlib.effective_cards(self.LOCAL, self.SNAP, server))}
+        self.assertEqual(rows["banreservas"]["spent"], 1260000)  # el consumo del 10/sep es de otro ciclo (16/sep–15/oct lo incluye si cae dentro)
+        self.assertEqual(rows["banreservas"]["available"], 240000)
+        alerts = cardlib.alerts(list(rows.values()), "RD$", set().__contains__)
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("84%", alerts[0][1])
+        self.assertIn("Disponible", alerts[0][1])
+
+    def test_due_reminders(self):
+        from datetime import date
+        rows = [{"bank": "bhd", "account": "Tarjeta BHD", "due": date(2026, 10, 5)}]
+        seen = set()
+        self.assertEqual(len(cardlib.due_reminders(rows, seen.__contains__, date(2026, 10, 2))), 1)  # 3 días
+        self.assertEqual(cardlib.due_reminders(rows, seen.__contains__, date(2026, 10, 3)), [])  # 2 días: no toca
+        self.assertIn("mañana", cardlib.due_reminders(rows, seen.__contains__, date(2026, 10, 4))[0][1])
+        self.assertIn("hoy", cardlib.due_reminders(rows, seen.__contains__, date(2026, 10, 5))[0][1])
+        key, _ = cardlib.due_reminders(rows, seen.__contains__, date(2026, 10, 5))[0]
+        seen.add(key)
+        self.assertEqual(cardlib.due_reminders(rows, seen.__contains__, date(2026, 10, 5)), [])  # sin repetir
+
+
+QIK_DEPOSIT = ("¡Hola Yordany Fern&aacute;ndez Caraballo! Hola Yordany, has recibido un depósito en tu cuenta Qik de manera satisfactoria.\n"
+               "<table><tbody><tr><td>Fecha</td><td>2026-10-31</td></tr><tr><td>Entidad origen</td><td>BANCO DE RESERVAS</td></tr>"
+               "<tr><td>Monto</td><td>30,000.00</td></tr><tr><td>Método de envío</td><td>ACH</td></tr></tbody></table>")
+
+
+class Salary(unittest.TestCase):
+    SALARY = {"amount": 30000, "tolerance_pct": 10, "origin_contains": ["reserva"], "account": "Qik ahorros", "category": "Salario"}
+
+    def test_parse_qik_deposit_html_and_cells(self):
+        inc = parse_qik_deposit("Yordany, has recibido un depósito a tu cuenta Qik.", QIK_DEPOSIT)
+        self.assertEqual((inc.amount_minor, inc.origin), (3000000, "BANCO DE RESERVAS"))
+        cells = "has recibido un depósito\n Fecha \n 2026-10-31 \n Entidad origen \n BANCO BHD LEON \n Monto \n 25,000.00 \n"
+        self.assertEqual(parse_qik_deposit("x", cells).origin, "BANCO BHD LEON")
+        with self.assertRaises(NotAPurchase):
+            parse_qik_deposit("Yordany, tu transferencia ACH fue procesada.", "tu transferencia ACH desde tu Cuenta Qik hacia otro banco fue enviada")
+
+    def test_only_salary_from_banreservas_is_income(self):
+        from types import SimpleNamespace
+        from arnic_bridge import cli
+        added, sent = [], []
+        cfg = SimpleNamespace(salary=self.SALARY, currency_symbol="RD$")
+        arnic = SimpleNamespace(add_income=lambda *a: added.append(a))
+        tg, state = SimpleNamespace(send=sent.append), SimpleNamespace(has=lambda k: False, add=lambda k: None)
+        mail = lambda mid, body: SimpleNamespace(message_id=mid, sender="transacciones@mail.qik.com.do", subject="has recibido un depósito", body=body, date_ms=_ms(2026, 10, 31))
+        self.assertEqual(cli.process_mail(mail("1", QIK_DEPOSIT), cfg, arnic, tg, state, snapshot={"transactions": []}), "registrado")
+        self.assertEqual((added[0][0], added[0][1], added[0][4]), (3000000, "Salario", "Qik ahorros"))
+        self.assertIn("Sueldo recibido", sent[0])
+        # otro banco, o un monto que no se parece al sueldo: se ignora en silencio
+        self.assertEqual(cli.process_mail(mail("2", QIK_DEPOSIT.replace("BANCO DE RESERVAS", "BANCO BHD LEON")), cfg, arnic, tg, state, snapshot={"transactions": []}), "omitido")
+        self.assertEqual(cli.process_mail(mail("3", QIK_DEPOSIT.replace("30,000.00", "4,500.00")), cfg, arnic, tg, state, snapshot={"transactions": []}), "omitido")
+        # el mismo depósito leído dos veces no se duplica
+        dup = {"transactions": [{"type": "income", "amountMinor": 3000000, "occurredAt": _ms(2026, 10, 31), "deletedAt": None}]}
+        self.assertEqual(cli.process_mail(mail("4", QIK_DEPOSIT), cfg, arnic, tg, state, snapshot=dup), "omitido")
+        self.assertEqual(len(added), 1)
+
+    def test_salary_tolerance(self):
+        from arnic_bridge.cli import _is_salary
+        from arnic_bridge.parser import Income
+        self.assertTrue(_is_salary(Income(3200000, "BANRESERVAS"), self.SALARY))  # +6.7%
+        self.assertFalse(_is_salary(Income(3400000, "BANRESERVAS"), self.SALARY))
+        self.assertFalse(_is_salary(Income(3000000, "BANCO POPULAR"), self.SALARY))
+        self.assertFalse(_is_salary(Income(3000000, "BANRESERVAS"), {}))
+
+
+class Insights(unittest.TestCase):
+    def snap(self, amounts, extra=None):
+        tx = [{"id": f"t{i}", "type": "expense", "amountMinor": a, "categoryId": "c1", "note": "SUPERMERCADO NACIONAL (tarjeta ••1111)",
+               "occurredAt": _ms(2026, 10, 1 + i), "updatedAt": i, "deletedAt": None} for i, a in enumerate(amounts)]
+        return {"transactions": tx + (extra or []), "categories": [{"id": "c1", "name": "Comida"}, {"id": "c2", "name": "Compras"}]}
+
+    def test_unusual(self):
+        s = self.snap([80000] * 6)
+        self.assertEqual(insights.unusual_reasons(s, "SUPERMERCADO NACIONAL", 90000), [])
+        self.assertTrue(any("extranjero" in r for r in insights.unusual_reasons(s, "UBER EATS Amsterdam NLD", 50000)))
+        self.assertTrue(any("monto alto" in r for r in insights.unusual_reasons(s, "SUPERMERCADO NACIONAL", 600000)))
+        self.assertTrue(any("nuevo" in r for r in insights.unusual_reasons(s, "TIENDA RARA", 400000)))
+        self.assertEqual(insights.unusual_reasons(s, "TIENDA RARA", 20000), [])  # nuevo pero barato
+        self.assertEqual(insights.unusual_reasons(self.snap([80000] * 2), "TIENDA RARA", 900000), [])  # poca historia: no se juzga monto ni novedad
+        self.assertEqual(foreign_country("HUMMUS SANTIAGO CENTER SANTIAGO DOM"), None)
+        self.assertEqual(foreign_country("PAYPAL *HOSTINGER 4029357733 USA"), "USA")
+
+    def test_learn_categories(self):
+        s = self.snap([1000])
+        self.assertEqual({k: v for k, v in insights.learn_categories(s, {"Comida": ["supermerc"]}, "Otros").items() if v}, {})  # categoría automática: nada que aprender
+        s["transactions"][0]["categoryId"] = "c2"  # el usuario la cambió a Compras
+        self.assertEqual(insights.learn_categories(s, {"Comida": ["supermerc"]}, "Otros"), {"SUPERMERCADO NACIONAL": "Compras"})
+        s["transactions"].append({**s["transactions"][0], "id": "t9", "categoryId": "c1", "updatedAt": 99})  # luego la devolvió a Comida
+        self.assertEqual(insights.learn_categories(s, {"Comida": ["supermerc"]}, "Otros"), {"SUPERMERCADO NACIONAL": None})
+
+    def test_merchant_key(self):
+        self.assertEqual(merchant_key("ECOPETROLEO LA VEGA LA VEGA DOM (tarjeta ••2110)"), "ECOPETROLEO LA VEGA LA VEGA")
+        self.assertEqual(merchant_key("PAYPAL *SPOTIFY*P47346"), "PAYPAL SPOTIFY P")
+
+    def test_subscriptions(self):
+        ev = [("SPOTIFY", "PAYPAL *SPOTIFY", 21798, _ms(2026, 8, 23)), ("SPOTIFY", "PAYPAL *SPOTIFY", 21798, _ms(2026, 9, 23)),
+              ("TEXACO", "TEXACO", 200000, _ms(2026, 9, 1)), ("TEXACO", "TEXACO", 460000, _ms(2026, 9, 9)),  # irregular: no es suscripción
+              ("UNA", "UNA SOLA VEZ", 5000, _ms(2026, 9, 3))]
+        found = insights.detect_subscriptions(ev, TZ)
+        self.assertEqual([s["label"] for s in found], ["PAYPAL *SPOTIFY"])
+        self.assertEqual(datetime.fromtimestamp(found[0]["next"] / 1000, TZ).date().isoformat(), "2026-10-23")
+
+
+class Reports(unittest.TestCase):
+    SNAP = {"accounts": [{"id": "a1", "name": "Qik ahorros"}, {"id": "a2", "name": "Tarjeta BHD"}],
+            "categories": [{"id": "c1", "name": "Comida"}, {"id": "c2", "name": "Salario"}], "budgets": [],
+            "transactions": [{"type": "income", "amountMinor": 3000000, "accountId": "a1", "categoryId": "c2", "note": "Sueldo", "occurredAt": _ms(2026, 10, 1)},
+                             {"type": "expense", "amountMinor": 150000, "accountId": "a2", "categoryId": "c1", "note": "BURGER KING", "occurredAt": _ms(2026, 10, 3)},
+                             {"type": "expense", "amountMinor": 99900, "accountId": "a2", "categoryId": "c1", "note": "AGOSTO", "occurredAt": _ms(2026, 9, 3)}]}
+
+    def test_summary(self):
+        now = datetime(2026, 10, 15, tzinfo=TZ)
+        text = budgets.summary_text(self.SNAP, now, "RD$", "month", category="comida")
+        self.assertIn("gastos RD$1,500.00", text)
+        self.assertIn("ingresos RD$0.00", text)
+        self.assertIn("ingresos RD$30,000.00", budgets.summary_text(self.SNAP, now, "RD$", "month", account="Qik ahorros"))
+
+    def test_goals_and_balance(self):
+        lines = budgets.goals_lines(self.SNAP, [{"name": "Fondo", "account": "qik ahorros", "target": 60000}], "RD$")
+        self.assertIn("RD$30,000.00 / RD$60,000.00 (50%)", lines[1])
+        self.assertEqual(budgets.goals_lines(self.SNAP, [], "RD$"), [])
+
+    def test_monthly_workbook_and_xlsx(self):
+        import tempfile
+        import zipfile
+        first = datetime(2026, 10, 1, tzinfo=TZ)
+        sheets, text = budgets.monthly_workbook(self.SNAP, first, "RD$", [], [])
+        self.assertIn("gastos RD$1,500.00", text)  # la compra de septiembre no entra
+        self.assertEqual(len(sheets[1][1]), 3)  # encabezado + 2 movimientos de octubre
+        with tempfile.TemporaryDirectory() as d:
+            path = f"{d}/r.xlsx"
+            export.write_xlsx(path, sheets)
+            with zipfile.ZipFile(path) as z:
+                self.assertIsNone(z.testzip())
+                self.assertIn("BURGER KING", z.read("xl/worksheets/sheet2.xml").decode())
+                self.assertIn('name="Movimientos"', z.read("xl/workbook.xml").decode())
 
 
 if __name__ == "__main__":

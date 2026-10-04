@@ -145,3 +145,58 @@ def parse_email(sender: str, subject: str, body: str) -> list:
         p.bank = "banreservas"
         return [p]
     raise NotAPurchase("remitente no soportado")
+
+
+@dataclass
+class Income:
+    amount_minor: int
+    origin: str
+    when_ms: int | None = None
+
+
+def _clean_cells(body: str) -> list:
+    """Celdas de una tabla venga como HTML crudo, texto con barras o una celda por línea."""
+    import html as _html
+    text = _html.unescape(re.sub(r"<[^>]+>", "\n", body))
+    return [re.sub(r"\s+", " ", c).strip() for c in re.split(r"[|\n]", text) if c.strip()]
+
+
+def parse_qik_deposit(subject: str, body: str) -> Income:
+    """Aviso de Qik 'has recibido un depósito': trae fecha, entidad de origen y monto, pero NO la descripción
+    que el usuario escribe en la transferencia (Qik no la incluye), así que el sueldo se reconoce por origen + monto."""
+    if not re.search(r"recibido un dep[oó]sito", f"{subject}\n{body}", re.I):
+        raise NotAPurchase("no es un depósito recibido")
+    cells = _clean_cells(body)
+
+    def after(label: str):
+        for i, c in enumerate(cells):
+            if c.lower() == label and i + 1 < len(cells):
+                return cells[i + 1]
+        return None
+
+    amount, origin = after("monto"), after("entidad origen")
+    digits = re.search(r"\d[\d.,]*", amount or "")
+    if not digits or not origin:
+        raise NotAPurchase("depósito sin monto u origen legible")
+    minor = parse_amount(digits.group(0))
+    if minor <= 0:
+        raise NotAPurchase("monto cero")
+    return Income(minor, origin)
+
+
+_COUNTRIES = set("""USA NLD GBR DEU HKG IRL ESP FRA ITA CAN MEX PAN COL BRA ARG CHL PER CHN JPN KOR SGP AUS CHE SWE LUX EST LTU POL PRT
+CYP ISR ARE IND TWN HUN CZE DNK NOR FIN BEL AUT PRI JAM CRI GTM ECU URY VEN TUR UKR ROU BGR MLT LVA""".split())
+
+
+def foreign_country(merchant: str) -> str | None:
+    """Los avisos de Banreservas terminan el comercio con el código ISO del país (DOM = local)."""
+    last = merchant.strip().split(" ")[-1].upper() if merchant.strip() else ""
+    return last if last in _COUNTRIES else None
+
+
+def merchant_key(text: str) -> str:
+    """Clave estable de un comercio para compararlo entre compras: sin tarjeta, acentos, números ni país local."""
+    base = text.split(" (tarjeta")[0]
+    base = re.sub(r"[^A-Z ]", " ", _strip_accents(base).upper())
+    tokens = [t for t in base.split() if t not in ("DOM", "PENDING")]
+    return " ".join(tokens)

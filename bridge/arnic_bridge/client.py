@@ -43,6 +43,21 @@ class Arnic:
                 return self._call("POST", "/v1/movements", body)
             raise
 
+    def add_income(self, amount_minor: int, category: str, note: str, occurred_ms: int, account: str = "") -> dict:
+        body = {"type": "income", "amountMinor": amount_minor, "category": category, "note": note, "occurredAtMs": occurred_ms}
+        if account:
+            body["account"] = account
+        return self._call("POST", "/v1/movements", body)
+
+    def get_config(self) -> dict:
+        """Configuración que edita la app (tarjetas). {} si el servidor es una versión anterior sin /v1/config."""
+        try:
+            return self._call("GET", "/v1/config").get("config", {})
+        except ApiError as e:
+            if e.status == 404:
+                return {}
+            raise
+
     def snapshot(self) -> dict:
         return self._call("GET", "/v1/sync?since=0")
 

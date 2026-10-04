@@ -70,7 +70,7 @@ def _alert_text(title, current, limit, kind, level, sym) -> str:
     return f"{head}\n{money(current, sym)} de {money(limit, sym)}"
 
 
-def report(snapshot: dict, now: datetime, sym: str, days: int, label: str, cards: dict | None = None) -> str:
+def report(snapshot: dict, now: datetime, sym: str, days: int, label: str, card_lines: list | None = None, extra_lines: list | None = None) -> str:
     since = _ms((now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)) if days > 1 else _ms(now.replace(hour=0, minute=0, second=0, microsecond=0))
     cats = {c["id"]: c["name"] for c in snapshot["categories"]}
     txs = [t for t in _live(snapshot["transactions"]) if t["occurredAt"] >= since and t["type"] == "expense"]
@@ -85,45 +85,84 @@ def report(snapshot: dict, now: datetime, sym: str, days: int, label: str, cards
     if top:
         lines.append("Mayores gastos:")
         lines += [f"  • {money(t['amountMinor'], sym)} — {t.get('note') or cats.get(t['categoryId'], '?')}" for t in top]
-    usage = card_usage(snapshot, now, cards or {})
-    if usage:
-        lines.append("Tarjetas (consumo del mes / límite):")
-        for _, account, spent, limit in usage:
-            lines.append(f"  • {account}: {money(spent, sym)}" + (f" / {money(limit, sym)} ({spent / limit:.0%})" if limit else ""))
+    if card_lines:
+        lines.append("Tarjetas (consumo del ciclo / límite):")
+        lines += card_lines
     prog = progress(snapshot, now)
     if prog:
         lines.append("Presupuestos del mes:")
         for title, cur, lim, kind, _ in prog:
             lines.append(f"  • {title}: {money(cur, sym)} / {money(lim, sym)} ({cur / lim:.0%})")
+    lines += extra_lines or []
     return "\n".join(lines)
 
 
-def card_usage(snapshot: dict, now: datetime, cards: dict):
-    """[(banco, cuenta, gastado_mes_minor, límite_minor)] por tarjeta configurada. Es consumo del mes: los pagos se ignoran a propósito."""
-    if not cards:
-        return []
-    start, end = _ms(month_start(now)), _ms(now) + 1
-    ids = {a["name"]: a["id"] for a in _live(snapshot["accounts"])}
+PERIODS = ("today", "week", "month", "all")
+
+
+def summary_text(snapshot: dict, now: datetime, sym: str, period: str = "month", category: str | None = None, account: str | None = None) -> str:
+    """Respuesta corta a '¿cuánto llevo...?'. Filtra por periodo, categoría y/o cuenta (por nombre, sin importar mayúsculas)."""
+    start = {"today": now.replace(hour=0, minute=0, second=0, microsecond=0),
+             "week": (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0),
+             "month": month_start(now), "all": None}[period]
+    lo = _ms(start) if start else 0
+    cats = {c["id"]: c["name"] for c in snapshot["categories"]}
+    accs = {a["id"]: a["name"] for a in snapshot["accounts"]}
+    txs = [t for t in _live(snapshot["transactions"]) if t["occurredAt"] >= lo
+           and (not category or cats.get(t["categoryId"], "").lower() == category.lower())
+           and (not account or accs.get(t["accountId"], "").lower() == account.lower())]
+    expense = sum(t["amountMinor"] for t in txs if t["type"] == "expense")
+    income = sum(t["amountMinor"] for t in txs if t["type"] == "income")
+    label = {"today": "hoy", "week": "últimos 7 días", "month": "este mes", "all": "en total"}[period]
+    scope = " · ".join(x for x in (category, account) if x)
+    out = [f"{label.capitalize()}{' — ' + scope if scope else ''}: gastos {money(expense, sym)}, ingresos {money(income, sym)} ({len(txs)} movimientos)"]
+    by_cat: dict = {}
+    for t in txs:
+        if t["type"] == "expense":
+            by_cat[cats.get(t["categoryId"], "?")] = by_cat.get(cats.get(t["categoryId"], "?"), 0) + t["amountMinor"]
+    out += [f"  • {name}: {money(v, sym)}" for name, v in sorted(by_cat.items(), key=lambda x: -x[1])[:8]]
+    return "\n".join(out)
+
+
+def account_balance(snapshot: dict, account_id: str) -> int:
+    return sum(t["amountMinor"] * (1 if t["type"] == "income" else -1) for t in _live(snapshot["transactions"]) if t["accountId"] == account_id)
+
+
+def goals_lines(snapshot: dict, goals: list, sym: str) -> list:
+    ids = {a["name"].lower(): a["id"] for a in _live(snapshot["accounts"])}
     out = []
-    for bank, c in cards.items():
-        aid = ids.get(c.get("account", ""))
-        spent = sum(t["amountMinor"] for t in _live(snapshot["transactions"])
-                    if t["type"] == "expense" and t["accountId"] == aid and start <= t["occurredAt"] < end) if aid else 0
-        out.append((bank, c.get("account", bank), spent, round(float(c.get("limit", 0)) * 100)))
-    return out
+    for g in goals:
+        aid = ids.get(g.get("account", "").lower())
+        target = round(float(g.get("target", 0)) * 100)
+        if aid and target:
+            bal = account_balance(snapshot, aid)
+            out.append(f"  • {g['name']}: {money(bal, sym)} / {money(target, sym)} ({max(bal, 0) / target:.0%})")
+    return (["Metas de ahorro:"] + out) if out else []
 
 
-def card_alerts(snapshot: dict, now: datetime, cards: dict, sym: str, already) -> list:
-    msgs = []
-    for bank, account, spent, limit in card_usage(snapshot, now, cards):
-        if not limit:
-            continue
-        ratio = spent / limit
-        for level, name in ((REACHED, "reached"), (APPROACHING, "approaching")):
-            if ratio >= level:
-                key = f"cardalert:{now:%Y-%m}:{bank}:{name}"
-                if not already(key):
-                    head = f"🚨 Llegaste al límite de {account}" if level == REACHED else f"⚠️ {account}: vas al {ratio:.0%} de su límite"
-                    msgs.append((key, f"{head}\nConsumo del mes: {money(spent, sym)} de {money(limit, sym)}"))
-                break
-    return msgs
+def monthly_workbook(snapshot: dict, first: datetime, sym: str, card_rows: list, subs: list) -> tuple:
+    """(hojas, resumen) del mes que empieza en `first`. Hojas: Resumen, Movimientos, Suscripciones."""
+    nxt = (first.replace(day=28) + timedelta(days=4)).replace(day=1)
+    lo, hi = _ms(first), _ms(nxt)
+    cats = {c["id"]: c["name"] for c in snapshot["categories"]}
+    accs = {a["id"]: a["name"] for a in snapshot["accounts"]}
+    txs = sorted((t for t in _live(snapshot["transactions"]) if lo <= t["occurredAt"] < hi), key=lambda t: t["occurredAt"])
+    expenses = [t for t in txs if t["type"] == "expense"]
+    total_exp = sum(t["amountMinor"] for t in expenses)
+    total_inc = sum(t["amountMinor"] for t in txs if t["type"] == "income")
+    by_cat: dict = {}
+    by_acc: dict = {}
+    for t in expenses:
+        by_cat[cats.get(t["categoryId"], "?")] = by_cat.get(cats.get(t["categoryId"], "?"), 0) + t["amountMinor"]
+        by_acc[accs.get(t["accountId"], "?")] = by_acc.get(accs.get(t["accountId"], "?"), 0) + t["amountMinor"]
+    resumen = [["Concepto", "Monto"], ["Gastos del mes", total_exp / 100], ["Ingresos del mes", total_inc / 100], ["Neto", (total_inc - total_exp) / 100], [], ["Gasto por categoría", ""]]
+    resumen += [[k, v / 100] for k, v in sorted(by_cat.items(), key=lambda x: -x[1])] + [[], ["Gasto por cuenta", ""]] + [[k, v / 100] for k, v in sorted(by_acc.items(), key=lambda x: -x[1])]
+    movs = [["Fecha", "Cuenta", "Tipo", "Categoría", "Detalle", "Monto"]]
+    movs += [[datetime.fromtimestamp(t["occurredAt"] / 1000, first.tzinfo).strftime("%Y-%m-%d %H:%M"), accs.get(t["accountId"], "?"),
+              "Gasto" if t["type"] == "expense" else "Ingreso", cats.get(t["categoryId"], "?"), t.get("note") or "", t["amountMinor"] / 100] for t in txs]
+    subsheet = [["Suscripción", "Monto", "Cada (días)", "Último cobro", "Próximo cobro"]]
+    subsheet += [[x["label"], x["amount"] / 100, x["every_days"], datetime.fromtimestamp(x["last"] / 1000, first.tzinfo).strftime("%Y-%m-%d"),
+                  datetime.fromtimestamp(x["next"] / 1000, first.tzinfo).strftime("%Y-%m-%d")] for x in subs]
+    text = [f"📊 Reporte de {first:%m/%Y}: gastos {money(total_exp, sym)}, ingresos {money(total_inc, sym)}, neto {money(total_inc - total_exp, sym)}"]
+    text += [f"  • {k}: {money(v, sym)}" for k, v in sorted(by_cat.items(), key=lambda x: -x[1])[:6]]
+    return [("Resumen", resumen), ("Movimientos", movs), ("Suscripciones", subsheet)], "\n".join(text)

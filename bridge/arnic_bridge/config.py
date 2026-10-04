@@ -31,7 +31,10 @@ class Config:
     currency_symbol: str = "RD$"
     usd_to_local: float | None = None
     card_account: str = ""
-    cards: dict = field(default_factory=dict)  # banco -> {"account": nombre, "limit": unidades}
+    cards: dict = field(default_factory=dict)  # banco -> {"account": nombre, "last4": [...]}; límite y fechas vienen de la app
+    salary: dict = field(default_factory=dict)  # {"amount": 30000, "tolerance_pct": 10, "origin_contains": ["reserva"], "account": "Qik ahorros", "category": "Salario"}
+    unusual: dict = field(default_factory=dict)  # umbrales de consumo inusual (ver insights.DEFAULT_UNUSUAL)
+    goals: list = field(default_factory=list)  # [{"name": "Fondo", "account": "Qik ahorros", "target": 100000}]
     fallback_category: str = "Otros"
     category_rules: dict = field(default_factory=lambda: dict(DEFAULT_CATEGORY_RULES))
     telegram_config_path: str = "/home/yordany/Escritorio/AI/telegram_bot/config.json"
