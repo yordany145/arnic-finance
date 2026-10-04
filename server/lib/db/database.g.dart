@@ -2844,6 +2844,214 @@ class UserConfigsCompanion extends UpdateCompanion<UserConfigRow> {
   }
 }
 
+class $ServerMetaTable extends ServerMeta
+    with TableInfo<$ServerMetaTable, ServerMetaRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ServerMetaTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
+  @override
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+    'key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<String> value = GeneratedColumn<String>(
+    'value',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [key, value];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'server_meta';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ServerMetaRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('key')) {
+      context.handle(
+        _keyMeta,
+        key.isAcceptableOrUnknown(data['key']!, _keyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_keyMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+        _valueMeta,
+        value.isAcceptableOrUnknown(data['value']!, _valueMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {key};
+  @override
+  ServerMetaRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ServerMetaRow(
+      key: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}key'],
+      )!,
+      value: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}value'],
+      )!,
+    );
+  }
+
+  @override
+  $ServerMetaTable createAlias(String alias) {
+    return $ServerMetaTable(attachedDatabase, alias);
+  }
+}
+
+class ServerMetaRow extends DataClass implements Insertable<ServerMetaRow> {
+  final String key;
+  final String value;
+  const ServerMetaRow({required this.key, required this.value});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['key'] = Variable<String>(key);
+    map['value'] = Variable<String>(value);
+    return map;
+  }
+
+  ServerMetaCompanion toCompanion(bool nullToAbsent) {
+    return ServerMetaCompanion(key: Value(key), value: Value(value));
+  }
+
+  factory ServerMetaRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ServerMetaRow(
+      key: serializer.fromJson<String>(json['key']),
+      value: serializer.fromJson<String>(json['value']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'key': serializer.toJson<String>(key),
+      'value': serializer.toJson<String>(value),
+    };
+  }
+
+  ServerMetaRow copyWith({String? key, String? value}) =>
+      ServerMetaRow(key: key ?? this.key, value: value ?? this.value);
+  ServerMetaRow copyWithCompanion(ServerMetaCompanion data) {
+    return ServerMetaRow(
+      key: data.key.present ? data.key.value : this.key,
+      value: data.value.present ? data.value.value : this.value,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ServerMetaRow(')
+          ..write('key: $key, ')
+          ..write('value: $value')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(key, value);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ServerMetaRow &&
+          other.key == this.key &&
+          other.value == this.value);
+}
+
+class ServerMetaCompanion extends UpdateCompanion<ServerMetaRow> {
+  final Value<String> key;
+  final Value<String> value;
+  final Value<int> rowid;
+  const ServerMetaCompanion({
+    this.key = const Value.absent(),
+    this.value = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ServerMetaCompanion.insert({
+    required String key,
+    required String value,
+    this.rowid = const Value.absent(),
+  }) : key = Value(key),
+       value = Value(value);
+  static Insertable<ServerMetaRow> custom({
+    Expression<String>? key,
+    Expression<String>? value,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (key != null) 'key': key,
+      if (value != null) 'value': value,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ServerMetaCompanion copyWith({
+    Value<String>? key,
+    Value<String>? value,
+    Value<int>? rowid,
+  }) {
+    return ServerMetaCompanion(
+      key: key ?? this.key,
+      value: value ?? this.value,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<String>(value.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ServerMetaCompanion(')
+          ..write('key: $key, ')
+          ..write('value: $value, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ServerDatabase extends GeneratedDatabase {
   _$ServerDatabase(QueryExecutor e) : super(e);
   $ServerDatabaseManager get managers => $ServerDatabaseManager(this);
@@ -2853,6 +3061,7 @@ abstract class _$ServerDatabase extends GeneratedDatabase {
   late final $TransactionsTable transactions = $TransactionsTable(this);
   late final $BudgetsTable budgets = $BudgetsTable(this);
   late final $UserConfigsTable userConfigs = $UserConfigsTable(this);
+  late final $ServerMetaTable serverMeta = $ServerMetaTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2864,6 +3073,7 @@ abstract class _$ServerDatabase extends GeneratedDatabase {
     transactions,
     budgets,
     userConfigs,
+    serverMeta,
   ];
 }
 
@@ -5933,6 +6143,154 @@ typedef $$UserConfigsTableProcessedTableManager =
       UserConfigRow,
       PrefetchHooks Function({bool userId})
     >;
+typedef $$ServerMetaTableCreateCompanionBuilder =
+    ServerMetaCompanion Function({
+      required String key,
+      required String value,
+      Value<int> rowid,
+    });
+typedef $$ServerMetaTableUpdateCompanionBuilder =
+    ServerMetaCompanion Function({
+      Value<String> key,
+      Value<String> value,
+      Value<int> rowid,
+    });
+
+class $$ServerMetaTableFilterComposer
+    extends Composer<_$ServerDatabase, $ServerMetaTable> {
+  $$ServerMetaTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ServerMetaTableOrderingComposer
+    extends Composer<_$ServerDatabase, $ServerMetaTable> {
+  $$ServerMetaTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ServerMetaTableAnnotationComposer
+    extends Composer<_$ServerDatabase, $ServerMetaTable> {
+  $$ServerMetaTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => column);
+
+  GeneratedColumn<String> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+}
+
+class $$ServerMetaTableTableManager
+    extends
+        RootTableManager<
+          _$ServerDatabase,
+          $ServerMetaTable,
+          ServerMetaRow,
+          $$ServerMetaTableFilterComposer,
+          $$ServerMetaTableOrderingComposer,
+          $$ServerMetaTableAnnotationComposer,
+          $$ServerMetaTableCreateCompanionBuilder,
+          $$ServerMetaTableUpdateCompanionBuilder,
+          (
+            ServerMetaRow,
+            BaseReferences<_$ServerDatabase, $ServerMetaTable, ServerMetaRow>,
+          ),
+          ServerMetaRow,
+          PrefetchHooks Function()
+        > {
+  $$ServerMetaTableTableManager(_$ServerDatabase db, $ServerMetaTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ServerMetaTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ServerMetaTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ServerMetaTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> key = const Value.absent(),
+                Value<String> value = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ServerMetaCompanion(key: key, value: value, rowid: rowid),
+          createCompanionCallback:
+              ({
+                required String key,
+                required String value,
+                Value<int> rowid = const Value.absent(),
+              }) => ServerMetaCompanion.insert(
+                key: key,
+                value: value,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ServerMetaTable, ServerMetaRow>(table),
+                  BaseReferences<
+                    _$ServerDatabase,
+                    $ServerMetaTable,
+                    ServerMetaRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ServerMetaTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ServerDatabase,
+      $ServerMetaTable,
+      ServerMetaRow,
+      $$ServerMetaTableFilterComposer,
+      $$ServerMetaTableOrderingComposer,
+      $$ServerMetaTableAnnotationComposer,
+      $$ServerMetaTableCreateCompanionBuilder,
+      $$ServerMetaTableUpdateCompanionBuilder,
+      (
+        ServerMetaRow,
+        BaseReferences<_$ServerDatabase, $ServerMetaTable, ServerMetaRow>,
+      ),
+      ServerMetaRow,
+      PrefetchHooks Function()
+    >;
 
 class $ServerDatabaseManager {
   final _$ServerDatabase _db;
@@ -5949,4 +6307,6 @@ class $ServerDatabaseManager {
       $$BudgetsTableTableManager(_db, _db.budgets);
   $$UserConfigsTableTableManager get userConfigs =>
       $$UserConfigsTableTableManager(_db, _db.userConfigs);
+  $$ServerMetaTableTableManager get serverMeta =>
+      $$ServerMetaTableTableManager(_db, _db.serverMeta);
 }

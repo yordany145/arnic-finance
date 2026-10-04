@@ -36,6 +36,7 @@ Router syncRoutes(ServerDatabase db) {
 
     return jsonResponse(200, {
       'serverTimeMs': serverTimeMs,
+      'epoch': await db.epoch(),
       'accounts': [for (final a in accounts) withoutUserId(a.toJson())],
       'categories': [for (final c in categories) withoutUserId(c.toJson())],
       'transactions': [for (final t in transactions) withoutUserId(t.toJson())],

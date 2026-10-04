@@ -23,9 +23,20 @@ class ServerSyncService {
     if (!_prefs.isConfigured) throw ServerSyncException('No hay un servidor configurado todavía.');
     final serverUrl = _prefs.serverUrl!;
     final apiKey = _prefs.apiKey!;
-    await _push(serverUrl, apiKey);
-    await _pull(serverUrl, apiKey);
+    await _syncData(serverUrl, apiKey, mayRetry: true);
     await _syncCardSettings(serverUrl, apiKey);
+  }
+
+  /// Sube lo nuevo y baja lo del servidor. Si el servidor perdió su base y la recreó (cambió su `epoch`), lo que ya
+  /// enviamos ya no está allí aunque nuestros cursores digan que sí: se reinician y se vuelve a subir todo, una sola vez.
+  Future<void> _syncData(String serverUrl, String apiKey, {required bool mayRetry}) async {
+    final hadSyncedBefore = _prefs.lastPushedAt > 0 || _prefs.lastPulledAt > 0; // antes de subir: la subida mueve los cursores
+    await _push(serverUrl, apiKey);
+    final serverWasReset = await _pull(serverUrl, apiKey, hadSyncedBefore: hadSyncedBefore);
+    if (serverWasReset && mayRetry) {
+      await _prefs.resetCursors();
+      await _syncData(serverUrl, apiKey, mayRetry: false);
+    }
   }
 
   /// Gana la edición más reciente. Un fallo aquí no debe hacer fallar la sincronización de movimientos
@@ -74,14 +85,21 @@ class ServerSyncService {
     await _prefs.setLastPushedAt(serverTimeMs);
   }
 
-  Future<void> _pull(String serverUrl, String apiKey) async {
+  /// Devuelve `true` si el servidor cambió de `epoch` desde la última vez (es decir, perdió su base).
+  Future<bool> _pull(String serverUrl, String apiKey, {required bool hadSyncedBefore}) async {
     final since = _prefs.lastPulledAt;
     final result = await _client.pull(serverUrl: serverUrl, apiKey: apiKey, since: since);
     final rows = result.rows;
 
+    final previousEpoch = _prefs.serverEpoch;
+    // Un servidor con epoch que no es el que conocíamos = base nueva. Si nunca habíamos visto un epoch pero ya habíamos
+    // subido datos, es el primer despliegue con esta función (el contenedor nuevo parte vacío): también hay que volver a subir.
+    final serverWasReset = result.epoch != null && result.epoch != previousEpoch && (previousEpoch != null || hadSyncedBefore);
+    if (result.epoch != null) await _prefs.setServerEpoch(result.epoch!);
+
     if (rows.values.every((list) => list.isEmpty)) {
       await _prefs.setLastPulledAt(result.serverTimeMs);
-      return;
+      return serverWasReset;
     }
 
     // Orden de claves foráneas: cuentas/categorías antes que presupuestos y
@@ -95,5 +113,6 @@ class ServerSyncService {
       });
     });
     await _prefs.setLastPulledAt(result.serverTimeMs);
+    return serverWasReset;
   }
 }

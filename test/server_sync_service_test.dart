@@ -145,4 +145,77 @@ void main() {
     final service = ServerSyncService(db, ServerSyncClient(httpClient: fake), prefs);
     await expectLater(service.syncNow(), throwsA(isA<ServerSyncException>()));
   });
+
+  test('si el servidor perdió su base (cambia su epoch), se vuelve a subir todo una sola vez', () async {
+    await DriftMovementRepository(db).add(MovementInput(
+      type: TxType.expense,
+      amountMinor: 123400,
+      categoryId: 'exp_food',
+      accountId: kDefaultAccountId,
+      occurredAt: DateTime(2026, 10, 2),
+      note: 'Gasolina',
+    ));
+
+    final serverNow = DateTime.now().millisecondsSinceEpoch + 60000; // hora del servidor posterior a lo ya guardado
+    var epoch = 'A';
+    final fake = _FakeHttpClient((request, body) async {
+      if (request.method == 'POST') return _json(200, {'serverTimeMs': serverNow});
+      return _json(200, {'serverTimeMs': serverNow, 'epoch': epoch, 'accounts': [], 'categories': [], 'transactions': [], 'budgets': []});
+    });
+    final service = ServerSyncService(db, ServerSyncClient(httpClient: fake), prefs);
+    int pushes() => fake.requests.where((r) => r.$1 == 'POST').length;
+    bool lastPushHasMovement() => fake.requests.lastWhere((r) => r.$1 == 'POST').$3!.contains('Gasolina');
+
+    await service.syncNow();
+    expect(pushes(), 1); // primera vez: sube lo que hay
+    expect(prefs.serverEpoch, 'A');
+
+    await service.syncNow();
+    expect(pushes(), 1); // sin cambios y mismo servidor: no reenvía nada
+
+    epoch = 'B'; // Render recreó el contenedor: base nueva y vacía
+    await service.syncNow();
+    expect(pushes(), 2); // se reinician los cursores y se sube todo otra vez
+    expect(lastPushHasMovement(), isTrue);
+    expect(prefs.serverEpoch, 'B');
+
+    await service.syncNow();
+    expect(pushes(), 2); // y no entra en bucle: ya está al día con la base nueva
+  });
+
+  test('un servidor antiguo sin epoch no provoca reenvíos', () async {
+    await DriftMovementRepository(db).add(MovementInput(
+      type: TxType.expense, amountMinor: 100, categoryId: 'exp_food', accountId: kDefaultAccountId, occurredAt: DateTime(2026, 10, 2)));
+    final serverNow = DateTime.now().millisecondsSinceEpoch + 60000;
+    final fake = _FakeHttpClient((request, body) async => request.method == 'POST'
+        ? _json(200, {'serverTimeMs': serverNow})
+        : _json(200, {'serverTimeMs': serverNow, 'accounts': [], 'categories': [], 'transactions': [], 'budgets': []}));
+    final service = ServerSyncService(db, ServerSyncClient(httpClient: fake), prefs);
+    await service.syncNow();
+    await service.syncNow();
+    expect(fake.requests.where((r) => r.$1 == 'POST').length, 1);
+    expect(prefs.serverEpoch, isNull);
+  });
+
+  test('primer despliegue con epoch: si la app ya había sincronizado, vuelve a subir todo', () async {
+    await DriftMovementRepository(db).add(MovementInput(
+      type: TxType.expense, amountMinor: 100, categoryId: 'exp_food', accountId: kDefaultAccountId, occurredAt: DateTime(2026, 10, 2), note: 'Previo'));
+    final serverNow = DateTime.now().millisecondsSinceEpoch + 60000;
+    var withEpoch = false;
+    final fake = _FakeHttpClient((request, body) async => request.method == 'POST'
+        ? _json(200, {'serverTimeMs': serverNow})
+        : _json(200, {'serverTimeMs': serverNow, if (withEpoch) 'epoch': 'NUEVA', 'accounts': [], 'categories': [], 'transactions': [], 'budgets': []}));
+    final service = ServerSyncService(db, ServerSyncClient(httpClient: fake), prefs);
+    int pushes() => fake.requests.where((r) => r.$1 == 'POST').length;
+
+    await service.syncNow(); // servidor antiguo, sin epoch
+    expect(pushes(), 1);
+    withEpoch = true; // se despliega la versión nueva sobre un contenedor vacío
+    await service.syncNow();
+    expect(pushes(), 2);
+    expect(fake.requests.lastWhere((r) => r.$1 == 'POST').$3, contains('Previo'));
+    expect(prefs.serverEpoch, 'NUEVA');
+    await service.syncNow();
+    expect(pushes(), 2);
+  });
 }

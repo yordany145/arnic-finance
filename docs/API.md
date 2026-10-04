@@ -69,6 +69,20 @@ avisos de consumo de tus tarjetas y los registra con estos endpoints:
 
 Cualquier otro programa tuyo puede usarlos igual.
 
+## Persistencia: que la API key y los datos sobrevivan a un reinicio
+
+El plan gratis de Render tiene disco efímero: al desplegar o recrear el contenedor, la base de datos se pierde, y con ella
+la API key. Dos mecanismos lo hacen indoloro (el teléfono sigue siendo la fuente de verdad):
+
+- **`API_KEY_HASH`** (variable de entorno, opcional). Es el SHA-256 de tu API key
+  (`printf '%s' "$TU_KEY" | sha256sum`). Si la base está vacía, el servidor crea el usuario con esa clave al arrancar, así que
+  la misma key sigue valiendo tras un reinicio. Solo se guarda el hash, igual que con una key generada. Si regeneras la key
+  (`rotate`), actualiza esta variable.
+- **`epoch`** en `GET /v1/sync`: un identificador aleatorio creado con la base. Si cambia, la app entiende que el servidor
+  perdió sus datos y vuelve a subir todo sola, una sola vez.
+
+Con las dos, un reinicio no pide generar ni copiar nada: al abrir la app, el servidor se repone.
+
 ## Referencia de la API
 
 Todas las rutas bajo `/v1/` (salvo `/v1/setup`) requieren:

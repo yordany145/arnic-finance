@@ -15,9 +15,12 @@ class ServerSyncException implements Exception {
 typedef SyncRows = Map<String, List<Map<String, dynamic>>>;
 
 class PullResult {
-  const PullResult({required this.serverTimeMs, required this.rows});
+  const PullResult({required this.serverTimeMs, required this.rows, this.epoch});
   final int serverTimeMs;
   final SyncRows rows;
+
+  /// Identificador de la base del servidor; cambia si el servidor la perdió y la recreó. `null` en servidores antiguos.
+  final String? epoch;
 }
 
 class RemoteConfig {
@@ -61,6 +64,7 @@ class ServerSyncClient {
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     return PullResult(
       serverTimeMs: body['serverTimeMs'] as int,
+      epoch: body['epoch'] as String?,
       rows: {
         for (final key in const ['accounts', 'categories', 'transactions', 'budgets'])
           key: (body[key] as List? ?? const []).cast<Map<String, dynamic>>(),

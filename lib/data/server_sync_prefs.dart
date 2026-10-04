@@ -51,6 +51,7 @@ class ServerSyncPrefs {
     await _secrets.write(_kApiKey, apiKey);
     _apiKey = apiKey;
     await _prefs.setString(_kServerUrl, serverUrl);
+    await _prefs.remove(_kEpoch);
     await resetCursors();
   }
 
@@ -58,9 +59,16 @@ class ServerSyncPrefs {
     await _prefs.remove(_kServerUrl);
     await _secrets.delete(_kApiKey);
     _apiKey = null;
+    await _prefs.remove(_kEpoch);
     await _prefs.setBool(_kEnabled, false);
     await resetCursors();
   }
+
+  static const _kEpoch = 'server_epoch';
+
+  /// Identificador de la base del servidor la última vez que sincronizamos (ver `PullResult.epoch`).
+  String? get serverEpoch => _prefs.getString(_kEpoch);
+  Future<void> setServerEpoch(String value) => _prefs.setString(_kEpoch, value);
 
   int get lastPulledAt => _prefs.getInt(_kLastPulledAt) ?? 0;
   Future<void> setLastPulledAt(int value) => _prefs.setInt(_kLastPulledAt, value);

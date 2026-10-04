@@ -13,12 +13,14 @@ void main() {
     var db = ServerDatabase.file(path);
     await db.customStatement("INSERT INTO users (id, api_key_hash, created_at) VALUES ('u1', 'hash', 1)");
     await db.customStatement('DROP TABLE user_configs');
+    await db.customStatement('DROP TABLE server_meta');
     await db.customStatement('PRAGMA user_version = 1');
     await db.close();
 
     db = ServerDatabase.file(path); // al abrir, drift ve user_version 1 < 2 y migra
     addTearDown(db.close);
     expect(await db.select(db.userConfigs).get(), isEmpty);
+    expect(await db.epoch(), isNotEmpty);
     expect((await db.select(db.users).get()).single.id, 'u1');
   });
 }

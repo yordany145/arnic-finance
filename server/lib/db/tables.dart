@@ -124,3 +124,15 @@ class UserConfigs extends Table {
   @override
   Set<Column> get primaryKey => {userId};
 }
+
+/// Datos del propio servidor (no del usuario). Hoy: `epoch`, un identificador aleatorio creado junto con la base.
+/// Si la base se pierde (el plan gratis de Render es efímero) y se recrea, el `epoch` cambia, y la app lo nota
+/// y vuelve a subir todo en vez de asumir que el servidor aún tiene lo que ya había enviado.
+@DataClassName('ServerMetaRow')
+class ServerMeta extends Table {
+  TextColumn get key => text()();
+  TextColumn get value => text()();
+
+  @override
+  Set<Column> get primaryKey => {key};
+}

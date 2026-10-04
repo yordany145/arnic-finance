@@ -8,6 +8,8 @@ import 'package:test/test.dart';
 import 'package:arnic_finance_server/db/database.dart';
 import 'package:arnic_finance_server/server.dart';
 import 'package:arnic_finance_server/util/rate_limit.dart';
+import 'package:arnic_finance_server/util/seed_key.dart';
+import 'package:crypto/crypto.dart';
 
 const _setupToken = 'test-setup-token';
 
@@ -135,6 +137,43 @@ void main() {
 
     test('exige API key', () async {
       expect((await get('/v1/config')).statusCode, 401);
+    });
+  });
+
+  group('clave que sobrevive a una base nueva (API_KEY_HASH) y epoch', () {
+    String hashOf(String key) => sha256.convert(utf8.encode(key)).toString();
+
+    test('base vacía + hash: la clave funciona sin haber pasado por /v1/setup', () async {
+      expect(await seedApiKeyHash(db, hashOf('mi-clave-secreta')), isTrue);
+      final res = await get('/v1/categories', headers: {'authorization': 'Bearer mi-clave-secreta'});
+      expect(res.statusCode, isNot(401));
+      final wrong = await get('/v1/categories', headers: {'authorization': 'Bearer otra'});
+      expect(wrong.statusCode, 401);
+    });
+
+    test('nunca pisa un usuario existente, y un hash mal formado se rechaza', () async {
+      final existing = await setupAndGetApiKey();
+      expect(await seedApiKeyHash(db, hashOf('otra-clave')), isFalse);
+      expect((await get('/v1/categories', headers: {'authorization': 'Bearer $existing'})).statusCode, isNot(401));
+      expect(await seedApiKeyHash(db, null), isFalse);
+      expect(await seedApiKeyHash(db, '  '), isFalse);
+      expect(() => seedApiKeyHash(db, 'no-es-un-hash'), throwsFormatException);
+    });
+
+    test('con la clave sembrada, /v1/setup sin rotate sigue dando 409 (no se crea una segunda)', () async {
+      await seedApiKeyHash(db, hashOf('mi-clave-secreta'));
+      final res = await post('/v1/setup', headers: {'x-setup-token': _setupToken});
+      expect(res.statusCode, 409);
+    });
+
+    test('el epoch es estable en una base y distinto en una base nueva; viaja en /v1/sync', () async {
+      final key = await setupAndGetApiKey();
+      final a = jsonDecode((await get('/v1/sync?since=0', headers: {'authorization': 'Bearer $key'})).body)['epoch'] as String;
+      final b = jsonDecode((await get('/v1/sync?since=0', headers: {'authorization': 'Bearer $key'})).body)['epoch'] as String;
+      expect(a, b);
+      final other = ServerDatabase.inMemory();
+      addTearDown(other.close);
+      expect(await other.epoch(), isNot(a));
     });
   });
 
