@@ -117,7 +117,7 @@ def parse_bhd(body: str) -> list:
         if not m or k + 5 >= len(cells):
             continue
         cur, amount, merchant, estado, tipo = cells[k + 1 : k + 6]
-        if not re.search(r"aprobad", estado, re.I) or not re.fullmatch(r"compra|consumo", tipo, re.I) or not re.fullmatch(r"[A-Za-z]{2,3}", cur):
+        if not re.search(r"aprobad", estado, re.I) or not re.fullmatch(r"compra|consumo|goods services( with cash back)?", tipo, re.I) or not re.fullmatch(r"[A-Za-z]{2,3}", cur):
             continue
         digits = re.search(r"[\d.,]*\d", amount)
         minor = parse_amount(digits.group(0)) if digits else 0

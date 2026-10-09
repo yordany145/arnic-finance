@@ -76,6 +76,14 @@ class Cards(unittest.TestCase):
         self.assertEqual((p.amount_minor, p.merchant, p.card_last4), (200000, "ECO PETROLEO ALMONTE L", "1111"))
         self.assertEqual(categorize(p.merchant, DEFAULT_CATEGORY_RULES, "Otros"), "Combustible")
 
+    def test_bhd_purchase_with_cash_back_type(self):
+        """BHD etiqueta algunas compras (p. ej. Amazon) como 'Goods services with cash back'."""
+        html = ("BHD Notificación de Transacciones Mastercard Local # 1111 Te notificamos la transacción realizada con tu Tarjeta Mastercard Local # 1111 \n"
+                "Detalle de Transacciones \n \n Fecha \n \n Moneda \n \n Monto \n \n Comercio \n \n Estado \n \n Tipo \n \n"
+                " 09/10/2026 03:34 am \n \n RD \n \n $1,445.37 \n \n AMAZON 1 \n \n Aprobada \n \n Goods services with cash back \n \n Ahora, tus Tarjetas BHD")
+        (p,) = parse_email("alertas@bhd.com.do", "BHD Notificación de Transacciones", html)
+        self.assertEqual((p.amount_minor, p.merchant, p.card_last4), (144537, "AMAZON 1", "1111"))
+
     def test_bhd_ignores_non_purchases(self):
         for tipo, estado in (("Retiro", "Aprobada"), ("Compra", "Rechazada"), ("Pago", "Aprobada")):
             with self.assertRaises(NotAPurchase):
