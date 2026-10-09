@@ -20,6 +20,7 @@ class _ChatMessage {
 }
 
 const _quickReplies = <String>[
+  'Gasté 500 en comida',
   '¿Cuánto gasté hoy?',
   '¿Cuánto gasté este mes?',
   '¿Cómo van mis presupuestos?',
@@ -50,6 +51,11 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   final _scrollController = ScrollController();
   PendingClarification? _pending;
   bool _sending = false;
+
+  /// Último movimiento registrado desde el chat, para poder "deshacer".
+  String? _lastRegisteredId;
+
+  static final _undoWords = RegExp(r'^(deshacer|deshazlo|deshaz|quitalo|quítalo|borralo|bórralo|cancelalo|cancélalo|me equivoque|me equivoqué)[!. ]*$', caseSensitive: false);
 
   @override
   void dispose() {
@@ -82,7 +88,27 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
       container.read(budgetRepositoryProvider),
       currency,
       now,
+      defaultAccountId: container.read(defaultAccountIdProvider).value,
     );
+
+    if (_undoWords.hasMatch(text)) {
+      final id = _lastRegisteredId;
+      var reply = 'No tengo nada reciente que deshacer.';
+      if (id != null) {
+        _lastRegisteredId = null;
+        await container.read(movementRepositoryProvider).delete(id);
+        container.read(quickActionsProvider).refreshWidgets();
+        unawaited(syncWithServerIfEnabled(container));
+        reply = 'Listo, lo quité.';
+      }
+      if (!mounted) return;
+      setState(() {
+        _messages.add(_ChatMessage(reply, fromUser: false));
+        _sending = false;
+      });
+      _scrollToEnd();
+      return;
+    }
 
     final pending = _pending;
     final completed = pending == null ? null : _tryCompletePending(pending, text, expenseCats);
@@ -90,6 +116,10 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
         _parser.parse(text, expenseCategories: expenseCats, incomeCategories: incomeCats, accounts: accounts, now: now);
     final result = await engine.answer(intent);
 
+    if (result.registeredId != null) {
+      _lastRegisteredId = result.registeredId;
+      container.read(quickActionsProvider).refreshWidgets();
+    }
     if (!mounted) return;
     setState(() {
       _messages.add(_ChatMessage(result.text, fromUser: false));
@@ -140,8 +170,14 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // _send las lee con `container.read` (no se puede observar dentro de un handler): se observan aquí para
+    // que ya estén cargadas. Sin esto el asistente no reconocía categorías ni cuentas la primera vez.
+    ref.watch(categoriesProvider(TxType.expense));
+    ref.watch(categoriesProvider(TxType.income));
+    ref.watch(accountsProvider);
+    ref.watch(defaultAccountIdProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Asistente')),
+      appBar: AppBar(title: Text('Asistente', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800))),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -179,7 +215,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                       textCapitalization: TextCapitalization.sentences,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _send(),
-                      decoration: const InputDecoration(hintText: 'Escribe tu pregunta…'),
+                      decoration: const InputDecoration(hintText: 'Pregunta o anota un gasto…'),
                     ),
                   ),
                   const SizedBox(width: 8),

@@ -9,12 +9,16 @@ import '../data/server_sync_client.dart';
 import '../data/server_sync_prefs.dart';
 import '../data/server_sync_service.dart';
 import '../data/repositories/drift_account_repository.dart';
+import '../data/reviewed_store.dart';
 import '../data/repositories/drift_budget_repository.dart';
 import '../data/repositories/drift_category_repository.dart';
 import '../data/repositories/drift_movement_repository.dart';
 import '../data/repositories/drift_settings_repository.dart';
 import '../data/update_service.dart';
+import '../domain/bank_movement.dart';
+import '../domain/budget_suggestions.dart';
 import '../domain/card_config.dart';
+import '../domain/month_pace.dart';
 import '../domain/budget.dart';
 import '../domain/budget_alert_service.dart';
 import '../domain/date_range.dart';
@@ -140,6 +144,28 @@ class ServerSyncEnabledNotifier extends Notifier<bool> {
 
 final serverSyncEnabledProvider = NotifierProvider<ServerSyncEnabledNotifier, bool>(ServerSyncEnabledNotifier.new);
 
+enum SyncState { idle, syncing, ok, error }
+
+/// Resultado de la última sincronización con el servidor, para mostrarlo en Inicio:
+/// sin esto un fallo (sin internet, clave inválida) pasa totalmente inadvertido.
+class SyncStatus {
+  const SyncStatus({this.state = SyncState.idle, this.lastOk});
+
+  final SyncState state;
+  final DateTime? lastOk;
+}
+
+class SyncStatusNotifier extends Notifier<SyncStatus> {
+  @override
+  SyncStatus build() => const SyncStatus();
+
+  void started() => state = SyncStatus(state: SyncState.syncing, lastOk: state.lastOk);
+  void succeeded() => state = SyncStatus(state: SyncState.ok, lastOk: DateTime.now());
+  void failed() => state = SyncStatus(state: SyncState.error, lastOk: state.lastOk);
+}
+
+final syncStatusProvider = NotifierProvider<SyncStatusNotifier, SyncStatus>(SyncStatusNotifier.new);
+
 /// Llamar tras guardar/editar/borrar/restaurar un movimiento (o presupuesto) y
 /// al reanudar la app — igual que `checkBudgetAlerts`. No lanza si falla
 /// (puede que no haya internet): una sincronización fallida nunca debe
@@ -147,10 +173,14 @@ final serverSyncEnabledProvider = NotifierProvider<ServerSyncEnabledNotifier, bo
 Future<void> syncWithServerIfEnabled(ProviderContainer container) async {
   final prefs = container.read(serverSyncPrefsProvider);
   if (!prefs.enabled || !prefs.isConfigured) return;
+  final status = container.read(syncStatusProvider.notifier);
+  status.started();
   try {
     await container.read(serverSyncServiceProvider).syncNow();
+    status.succeeded();
   } catch (_) {
     // Ver comentario de arriba.
+    status.failed();
   }
 }
 
@@ -217,6 +247,66 @@ final defaultAccountIdProvider =
     StreamProvider<String?>((ref) => ref.watch(settingsRepositoryProvider).watchDefaultAccountId());
 
 // ── Inicio ───────────────────────────────────────────────────────────────────
+final creditCardAccountsProvider = Provider<List<Account>>((ref) {
+  final accounts = ref.watch(accountsProvider).value ?? const <Account>[];
+  return [for (final a in accounts) if (a.kind == AccountKind.creditCard) a];
+});
+
+/// Ingresos/gastos acumulados de una cuenta (todo el historial).
+final accountSummaryProvider = StreamProvider.family<PeriodSummary, String>(
+    (ref, accountId) => ref.watch(movementRepositoryProvider).watchSummary(MovementFilter(accountId: accountId)));
+
+/// Lo consumido en tarjetas de crédito (todo el historial, en positivo si se debe). Sirve para
+/// explicar que parte del balance de Inicio es deuda de tarjeta y no dinero que ya salió.
+final creditCardNetSpendProvider = Provider<int>((ref) {
+  var total = 0;
+  for (final card in ref.watch(creditCardAccountsProvider)) {
+    total -= ref.watch(accountSummaryProvider(card.id)).value?.balanceMinor ?? 0;
+  }
+  return total;
+});
+
+final reviewedStoreProvider = Provider<ReviewedStore>((ref) => ReviewedStore(ref.watch(sharedPreferencesProvider)));
+
+class ReviewedIdsNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => ref.watch(reviewedStoreProvider).read();
+
+  Future<void> markAll(Iterable<String> ids) async {
+    state = {...state, ...ids};
+    await ref.read(reviewedStoreProvider).write(state);
+  }
+}
+
+final reviewedIdsProvider = NotifierProvider<ReviewedIdsNotifier, Set<String>>(ReviewedIdsNotifier.new);
+
+/// Gastos que entraron solos del banco, quedaron en "Otros" y nadie ha confirmado (últimos 6 meses).
+final reviewQueueProvider = Provider<List<Movement>>((ref) {
+  final reviewed = ref.watch(reviewedIdsProvider);
+  final movements = ref.watch(reportMovementsProvider).value ?? const <Movement>[];
+  return [for (final m in movements) if (needsReview(m, reviewed)) m];
+});
+
+/// Ritmo de gasto del mes (promedio diario, proyección, y por día si hay límite general).
+final monthPaceProvider = Provider<MonthPace?>((ref) {
+  final month = ref.watch(monthSummaryProvider).value;
+  if (month == null) return null;
+  final budgets = ref.watch(budgetProgressProvider).value ?? const <BudgetProgress>[];
+  final overall = budgets.where((p) => p.budget.kind == BudgetKind.overallExpense).firstOrNull;
+  return computeMonthPace(spentMinor: month.expenseMinor, now: ref.watch(nowProvider), limitMinor: overall?.budget.amountMinor);
+});
+
+/// Límites sugeridos según el gasto de meses anteriores, sin repetir categorías con presupuesto.
+final budgetSuggestionsProvider = Provider<List<BudgetSuggestion>>((ref) {
+  final movements = ref.watch(reportMovementsProvider).value ?? const <Movement>[];
+  final budgets = ref.watch(budgetsProvider).value ?? const <Budget>[];
+  return suggestBudgets(
+    movements: movements,
+    now: ref.watch(nowProvider),
+    excludeCategoryIds: {for (final b in budgets) if (b.categoryId != null) b.categoryId!},
+  );
+});
+
 /// Balance actual = todos los ingresos − todos los gastos.
 final balanceSummaryProvider =
     StreamProvider<PeriodSummary>((ref) => ref.watch(movementRepositoryProvider).watchSummary(const MovementFilter()));

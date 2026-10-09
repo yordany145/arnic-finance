@@ -75,6 +75,14 @@ class _AddMovementScreenState extends ConsumerState<AddMovementScreen> {
     super.dispose();
   }
 
+  /// Vuelve a llenar el formulario con el último movimiento del mismo tipo (monto, categoría, cuenta, nota).
+  void _repeat(Movement m) => setState(() {
+        _amount = amountToInputText(m.amountMinor);
+        _categoryId = m.category.id;
+        _accountId = m.account.id;
+        _note.text = m.note ?? '';
+      });
+
   Future<void> _pickDateTime() async {
     final initial = _pickedAt ?? DateTime.now();
     final date = await showDatePicker(
@@ -193,6 +201,9 @@ class _AddMovementScreenState extends ConsumerState<AddMovementScreen> {
         : (accounts.any((a) => a.id == defaultId) ? defaultId : accounts.firstOrNull?.id);
     final account = accounts.where((a) => a.id == accountId).firstOrNull;
 
+    final lastOfType = _editing
+        ? null
+        : (ref.watch(recentMovementsProvider).value ?? const <Movement>[]).where((m) => m.type == _type).firstOrNull;
     final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
     final now = ref.watch(nowProvider);
 
@@ -218,11 +229,43 @@ class _AddMovementScreenState extends ConsumerState<AddMovementScreen> {
                           _categoryId = null;
                         }),
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 6),
                       _AmountDisplay(currency: currency, text: _amount, color: typeColor),
-                      const SizedBox(height: 14),
+                      // Fecha, cuenta y "repetir" van arriba, a la vista: debajo quedaban tapados por el teclado.
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          if (lastOfType != null && _amount.isEmpty)
+                            ActionChip(
+                              visualDensity: VisualDensity.compact,
+                              avatar: const Icon(Icons.replay, size: 18),
+                              label: Text('Repetir: ${lastOfType.category.icon} ${lastOfType.category.name} · ${formatMoney(lastOfType.amountMinor, currency)}'),
+                              onPressed: () => _repeat(lastOfType),
+                            ),
+                          ActionChip(
+                            visualDensity: VisualDensity.compact,
+                            avatar: const Icon(Icons.schedule, size: 18),
+                            label: Text(_pickedAt == null ? 'Ahora' : dateTimeLabel(_pickedAt!, now)),
+                            onPressed: _pickDateTime,
+                          ),
+                          // Con una sola cuenta no se muestra: no estorba el registro rápido.
+                          if (accounts.length > 1 && account != null)
+                            PopupMenuButton<String>(
+                              onSelected: (id) => setState(() => _accountId = id),
+                              itemBuilder: (_) => [
+                                for (final a in accounts) PopupMenuItem(value: a.id, child: Text('${a.icon}  ${a.name}')),
+                              ],
+                              child: IgnorePointer(
+                                child: ActionChip(visualDensity: VisualDensity.compact, label: Text('${account.icon} ${account.name}'), onPressed: () {}),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
                       Text('CATEGORÍA', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant)),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       CategoryPicker(
                         categories: categories,
                         selectedId: categoryId,
@@ -236,29 +279,6 @@ class _AddMovementScreenState extends ConsumerState<AddMovementScreen> {
                         textInputAction: TextInputAction.done,
                         decoration: const InputDecoration(labelText: 'Nota (opcional)', prefixIcon: Icon(Icons.notes)),
                       ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          ActionChip(
-                            avatar: const Icon(Icons.schedule, size: 18),
-                            label: Text(_pickedAt == null ? 'Ahora' : dateTimeLabel(_pickedAt!, now)),
-                            onPressed: _pickDateTime,
-                          ),
-                          // Con una sola cuenta no se muestra: no estorba el registro rápido.
-                          if (accounts.length > 1 && account != null)
-                            PopupMenuButton<String>(
-                              onSelected: (id) => setState(() => _accountId = id),
-                              itemBuilder: (_) => [
-                                for (final a in accounts) PopupMenuItem(value: a.id, child: Text('${a.icon}  ${a.name}')),
-                              ],
-                              child: IgnorePointer(
-                                child: ActionChip(label: Text('${account.icon} ${account.name}'), onPressed: () {}),
-                              ),
-                            ),
-                        ],
-                      ),
                     ],
                   ),
                 ),
@@ -270,7 +290,7 @@ class _AddMovementScreenState extends ConsumerState<AddMovementScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (!keyboardOpen) ...[
-                          AmountKeypad(onKey: (k) => setState(() => _amount = applyAmountKey(_amount, k))),
+                          AmountKeypad(keyHeight: 52, onKey: (k) => setState(() => _amount = applyAmountKey(_amount, k))),
                           const SizedBox(height: 10),
                         ],
                         FilledButton(
@@ -307,12 +327,12 @@ class _AmountDisplay extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
-            Text(currency, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w600, color: color.withValues(alpha: 0.8))),
+            Text(currency, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: color.withValues(alpha: 0.8))),
             const SizedBox(width: 6),
             Text(
               empty ? '0' : _grouped(text),
               style: TextStyle(
-                fontSize: 60,
+                fontSize: 52,
                 fontWeight: FontWeight.w800,
                 color: empty ? color.withValues(alpha: 0.30) : color,
               ),

@@ -1,7 +1,7 @@
 name: arnic_finance
 description: "Arnic Finance: finanzas personales con registro ultrarrápido."
 publish_to: 'none'
-version: 0.3.0+5
+version: 0.3.1+6
 
 environment:
   sdk: ^3.13.4

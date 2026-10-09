@@ -54,6 +54,9 @@ class IntentParser {
     final isAlertRequest = RegExp(r'avisa|notifica|avisame|notificame').hasMatch(text);
     if (isAlertRequest) return _parseAlert(working, category: category);
 
+    final register = _parseRegister(text, working, period, expenseCategories, incomeCategories, account);
+    if (register != null) return register;
+
     if (RegExp(r'busca(?:r)?\s+(.+)').hasMatch(working)) {
       final q = RegExp(r'busca(?:r)?\s+(.+)').firstMatch(working)!.group(1)!.trim();
       if (q.isNotEmpty) return SearchMovementsIntent(query: q, period: period);
@@ -117,6 +120,69 @@ class IntentParser {
     }
 
     return const UnknownIntent();
+  }
+
+  static final _expenseVerb = RegExp(r'\b(gaste|pague|compre|gastamos|pagamos|compramos)\b|\b(anota|anotame|registra|registrame|apunta|apuntame)\b.*\bgasto\b');
+  static final _incomeVerb = RegExp(r'\b(ingrese|cobre|recibi|gane|vendi|me pagaron|me depositaron)\b|\b(anota|anotame|registra|registrame|apunta|apuntame)\b.*\bingreso\b');
+  static final _questionWord = RegExp(r'\b(cuanto|cuantos|cuanta|cuantas|que|cual|cuales|donde|quien|como)\b');
+  static final _noteNoise = RegExp(
+      r'\b(gaste|pague|compre|gastamos|pagamos|compramos|ingrese|cobre|recibi|gane|vendi|me pagaron|me depositaron|anota|anotame|registra|registrame|apunta|apuntame|un|una|el|la|los|las|de|del|en|por|para|con|mi|me|gasto|ingreso|pesos|peso|rd)\b|[\$,]');
+
+  /// Palabras que delatan la categoría aunque el usuario no la nombre ("gasolina" → Combustible).
+  static const _categoryHints = <String, String>{
+    'gasolina': 'combustible', 'gasoil': 'combustible', 'diesel': 'combustible',
+    'almuerzo': 'comida', 'cena': 'comida', 'desayuno': 'comida', 'supermercado': 'comida', 'colmado': 'comida',
+    'restaurante': 'comida', 'pizza': 'comida', 'super': 'comida',
+    'uber': 'transporte', 'taxi': 'transporte', 'guagua': 'transporte', 'pasaje': 'transporte', 'peaje': 'transporte',
+    'luz': 'servicios', 'agua': 'servicios', 'internet': 'servicios', 'telefono': 'servicios', 'cable': 'servicios',
+    'farmacia': 'salud', 'medico': 'salud', 'doctor': 'salud', 'medicina': 'salud',
+    'netflix': 'suscripciones', 'spotify': 'suscripciones', 'youtube': 'suscripciones',
+    'cine': 'entretenimiento', 'fiesta': 'entretenimiento',
+    'alquiler': 'hogar', 'renta': 'hogar',
+    'sueldo': 'salario', 'nomina': 'salario', 'quincena': 'salario',
+  };
+
+  /// Un mensaje en primera persona y pasado ("gasté 500 en comida") es un registro, no una pregunta.
+  RegisterMovementIntent? _parseRegister(
+    String text,
+    String working,
+    PeriodExtraction? period,
+    List<Category> expenseCategories,
+    List<Category> incomeCategories,
+    Account? account,
+  ) {
+    if (text.contains('?') || _questionWord.hasMatch(working)) return null;
+    final expense = _expenseVerb.hasMatch(working);
+    final income = _incomeVerb.hasMatch(working);
+    if (expense == income) return null; // ninguno, o ambos: ambiguo
+    final amount = extractAmountMinor(working);
+    if (amount == null || amount <= 0) return null;
+    final type = expense ? TxType.expense : TxType.income;
+    final categories = expense ? expenseCategories : incomeCategories;
+    if (categories.isEmpty) return null;
+
+    var category = _findCategory(text, categories);
+    if (category == null) {
+      for (final word in working.split(' ')) {
+        final hint = _categoryHints[word];
+        if (hint == null) continue;
+        category = categories.where((c) => normalize(c.name) == hint).firstOrNull;
+        if (category != null) break;
+      }
+    }
+    category ??= categories.where((c) => normalize(c.name) == 'otros').firstOrNull ?? categories.last;
+
+    var note = working.replaceFirst(RegExp(r'\d[\d,]*(?:\.\d+)?\s*(?:mil|k)?\b'), ' ');
+    note = note.replaceAll(_noteNoise, ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    return RegisterMovementIntent(
+      type: type,
+      amountMinor: amount,
+      categoryId: category.id,
+      categoryName: category.name,
+      accountId: account?.id,
+      note: note.isEmpty ? null : note,
+      yesterday: period?.label == 'ayer',
+    );
   }
 
   AssistantIntent _parseAlert(String working, {Category? category}) {

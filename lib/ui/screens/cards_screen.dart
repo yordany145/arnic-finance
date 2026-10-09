@@ -9,9 +9,63 @@ import '../../domain/card_config.dart';
 import '../../domain/enums.dart';
 import '../../domain/models.dart';
 import '../../state/providers.dart';
+import '../widgets/card_usage_tile.dart';
 
 final _day = DateFormat('d MMM', 'es');
 final _short = DateFormat('dd/MM');
+
+/// Pide el nombre y crea una cuenta de tipo tarjeta de crédito; el límite y las fechas se ponen después tocándola.
+Future<void> addCreditCard(BuildContext context, WidgetRef ref) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final repo = ref.read(accountRepositoryProvider);
+  final name = await showDialog<String>(context: context, builder: (_) => const _NewCardDialog());
+  if (name == null) return;
+  await repo.create(name: name, icon: AccountKind.creditCard.defaultIcon, kind: AccountKind.creditCard);
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text('$name creada. Tócala para poner el límite y las fechas.')));
+}
+
+class _NewCardDialog extends StatefulWidget {
+  const _NewCardDialog();
+
+  @override
+  State<_NewCardDialog> createState() => _NewCardDialogState();
+}
+
+class _NewCardDialogState extends State<_NewCardDialog> {
+  final _name = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _name.text.trim();
+    if (name.isNotEmpty) Navigator.pop(context, name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Nueva tarjeta'),
+      content: TextField(
+        controller: _name,
+        autofocus: true,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _submit(),
+        decoration: const InputDecoration(labelText: 'Nombre', hintText: 'Tarjeta Banreservas'),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(onPressed: _submit, child: const Text('Crear')),
+      ],
+    );
+  }
+}
 
 /// Tarjetas de crédito: consumo del ciclo frente al límite, lo que queda disponible y la fecha de pago.
 /// Límite y días de corte y de pago se editan aquí y se sincronizan con el servidor, que también los
@@ -37,9 +91,15 @@ class CardsScreen extends ConsumerWidget {
                     Icon(Icons.credit_card_outlined, size: 48, color: scheme.outline),
                     const SizedBox(height: 12),
                     Text(
-                      'Aún no tienes tarjetas.\nCrea una cuenta de tipo "Tarjeta de crédito" en Ajustes > Cuentas.',
+                      'Aún no tienes tarjetas.\nAgrégalas para ver cuánto llevas gastado, lo que te queda y cuándo pagar.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 20),
+                    FilledButton.icon(
+                      onPressed: () => addCreditCard(context, ref),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Agregar tarjeta'),
                     ),
                   ],
                 ),
@@ -54,16 +114,14 @@ class CardsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 for (final card in cards) Padding(padding: const EdgeInsets.only(bottom: 12), child: _CardTile(account: card)),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(onPressed: () => addCreditCard(context, ref), icon: const Icon(Icons.add), label: const Text('Agregar otra tarjeta')),
+                ),
               ],
             ),
     );
   }
-}
-
-Color _barColor(ColorScheme scheme, double ratio) {
-  if (ratio >= 1) return scheme.error;
-  if (ratio >= 0.8) return Colors.orange.shade700;
-  return scheme.primary;
 }
 
 class _CardTile extends ConsumerWidget {
@@ -112,7 +170,7 @@ class _CardTile extends ConsumerWidget {
                     child: LinearProgressIndicator(
                       value: ratio.clamp(0, 1).toDouble(),
                       minHeight: 12,
-                      color: _barColor(scheme, ratio),
+                      color: cardBarColor(scheme, ratio),
                       backgroundColor: scheme.surfaceContainerHighest,
                     ),
                   ),
@@ -142,7 +200,7 @@ class _CardTile extends ConsumerWidget {
                   ),
                   _Chip(
                     icon: Icons.payments_outlined,
-                    text: due == null ? 'Sin fecha de pago' : 'Pago ${_day.format(due)} (${_daysLabel(due, now)})',
+                    text: due == null ? 'Sin fecha de pago' : 'Pago ${_day.format(due)} (${dueDaysLabel(due, now)})',
                   ),
                 ],
               ),
@@ -165,11 +223,6 @@ class _CardTile extends ConsumerWidget {
     unawaited(syncWithServerIfEnabled(container));
     if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${account.name}: guardado.')));
   }
-}
-
-String _daysLabel(DateTime due, DateTime now) {
-  final days = due.difference(DateTime(now.year, now.month, now.day)).inDays;
-  return switch (days) { 0 => 'hoy', 1 => 'mañana', _ => 'en $days días' };
 }
 
 class _Chip extends StatelessWidget {

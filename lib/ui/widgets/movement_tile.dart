@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/date_labels.dart';
 import '../../core/money.dart';
 import '../../core/theme.dart';
+import '../../domain/bank_movement.dart';
 import '../../domain/models.dart';
 
 class MovementTile extends StatelessWidget {
@@ -27,10 +28,11 @@ class MovementTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final color = movement.type.isExpense ? context.money.expense : context.money.income;
+    final fromBank = isBankMovement(movement);
     final parts = <String>[
       if (now != null) dateTimeLabel(movement.occurredAt, now!) else timeLabel(movement.occurredAt),
       if (showAccount) '${movement.account.icon} ${movement.account.name}',
-      if (movement.note != null) movement.note!,
+      if (movement.note != null) (bankMerchant(movement) ?? movement.note!),
     ];
     return ListTile(
       onTap: onTap,
@@ -40,7 +42,18 @@ class MovementTile extends StatelessWidget {
         backgroundColor: scheme.surfaceContainerHigh,
         child: Text(movement.category.icon, style: const TextStyle(fontSize: 24)),
       ),
-      title: Text(movement.category.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+      title: Row(
+        children: [
+          Flexible(child: Text(movement.category.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16))),
+          if (fromBank) ...[
+            const SizedBox(width: 6),
+            Tooltip(
+              message: 'Registrado solo desde el aviso del banco',
+              child: Icon(Icons.account_balance, size: 15, color: scheme.primary, semanticLabel: 'Registrado desde el aviso del banco'),
+            ),
+          ],
+        ],
+      ),
       subtitle: Text(parts.join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: Text(
         formatMoney(movement.signedMinor, currency, showSign: true),

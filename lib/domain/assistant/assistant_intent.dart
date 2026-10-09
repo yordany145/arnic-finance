@@ -84,6 +84,29 @@ class SearchMovementsIntent extends AssistantIntent {
   final PeriodExtraction? period;
 }
 
+/// "Gasté 500 en comida" / "cobré 3000 de salario": registra un movimiento desde el chat.
+class RegisterMovementIntent extends AssistantIntent {
+  const RegisterMovementIntent({
+    required this.type,
+    required this.amountMinor,
+    required this.categoryId,
+    required this.categoryName,
+    this.accountId,
+    this.note,
+    this.yesterday = false,
+  });
+
+  final TxType type;
+  final int amountMinor;
+  final String categoryId;
+  final String categoryName;
+  final String? accountId;
+  final String? note;
+
+  /// "gasté 500 ayer": se registra con la fecha de ayer.
+  final bool yesterday;
+}
+
 enum AlertGoal { categoryLimit, overallLimit, savingsGoal }
 
 /// "Avísame si gasto más de 5000 en Comida" → literalmente un presupuesto de

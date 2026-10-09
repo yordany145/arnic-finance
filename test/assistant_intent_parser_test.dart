@@ -178,4 +178,44 @@ void main() {
     expect(parse(''), isA<UnknownIntent>());
     expect(parse('xyz123 asdf'), isA<UnknownIntent>());
   });
+
+  group('registrar desde el chat', () {
+    test('"gasté 500 en comida" registra un gasto, no pregunta totales', () {
+      final i = parse('gasté 500 en comida') as RegisterMovementIntent;
+      expect((i.type, i.amountMinor, i.categoryId), (TxType.expense, 50000, 'exp_food'));
+      expect(i.note, isNull);
+    });
+
+    test('ingreso con monto en miles y categoría de ingreso', () {
+      final i = parse('cobré 3 mil de salario') as RegisterMovementIntent;
+      expect((i.type, i.amountMinor, i.categoryId), (TxType.income, 300000, 'inc_salary'));
+    });
+
+    test('adivina la categoría por palabras ("gasolina" → Combustible) y guarda la nota', () {
+      final i = parse('pagué 1,500 de gasolina') as RegisterMovementIntent;
+      expect((i.categoryId, i.amountMinor), ('exp_fuel', 150000));
+      expect(i.note, 'gasolina');
+    });
+
+    test('sin categoría reconocible cae en la primera/otros del tipo', () {
+      final i = parse('compré 250 en la ferretería') as RegisterMovementIntent;
+      expect(i.amountMinor, 25000);
+      expect(i.note, 'ferreteria');
+    });
+
+    test('"ayer" registra con fecha de ayer', () {
+      expect((parse('gasté 100 en comida ayer') as RegisterMovementIntent).yesterday, isTrue);
+    });
+
+    test('las preguntas siguen siendo preguntas', () {
+      expect(parse('¿cuánto gasté en comida?'), isA<TotalsIntent>());
+      expect(parse('cuanto gaste en comida este mes'), isA<TotalsIntent>());
+      expect(parse('gasté más este mes que el pasado'), isNot(isA<RegisterMovementIntent>()));
+    });
+
+    test('sin monto no registra, y las alertas no se confunden con registros', () {
+      expect(parse('gasté en comida'), isNot(isA<RegisterMovementIntent>()));
+      expect(parse('avísame si gasto más de 5000 en comida'), isA<CreateAlertIntent>());
+    });
+  });
 }

@@ -149,4 +149,47 @@ void main() {
     final list = await budgets.watch().first;
     expect(list.single.kind.name, 'savings');
   });
+
+  group('registrar movimientos', () {
+    test('crea el movimiento en la cuenta predeterminada y confirma', () async {
+      final answer = await engine.answer(const RegisterMovementIntent(
+        type: TxType.expense,
+        amountMinor: 50000,
+        categoryId: 'exp_food',
+        categoryName: 'Comida',
+        note: 'almuerzo',
+      ));
+      expect(answer.text, contains('RD\$500'));
+      expect(answer.text, contains('deshacer'));
+      expect(answer.registeredId, isNotNull);
+      final saved = await movements.getById(answer.registeredId!);
+      expect((saved!.amountMinor, saved.category.id, saved.account.id, saved.note), (50000, 'exp_food', kDefaultAccountId, 'almuerzo'));
+    });
+
+    test('"de ayer" usa la fecha de ayer', () async {
+      final answer = await engine.answer(const RegisterMovementIntent(
+        type: TxType.expense,
+        amountMinor: 10000,
+        categoryId: 'exp_food',
+        categoryName: 'Comida',
+        yesterday: true,
+      ));
+      final saved = await movements.getById(answer.registeredId!);
+      expect(saved!.occurredAt, DateTime(2026, 9, 14));
+      expect(answer.text, contains('de ayer'));
+    });
+
+    test('respeta la cuenta nombrada', () async {
+      await accounts.create(name: 'Banco', icon: '🏦', kind: AccountKind.bank);
+      final bank = (await accounts.watch().first).firstWhere((a) => a.name == 'Banco');
+      final answer = await engine.answer(RegisterMovementIntent(
+        type: TxType.income,
+        amountMinor: 100000,
+        categoryId: 'inc_salary',
+        categoryName: 'Salario',
+        accountId: bank.id,
+      ));
+      expect((await movements.getById(answer.registeredId!))!.account.id, bank.id);
+    });
+  });
 }

@@ -1,6 +1,7 @@
 import '../../core/date_labels.dart';
 import '../../core/money.dart';
 import '../budget.dart';
+import '../models.dart';
 import '../repositories.dart';
 import 'assistant_intent.dart';
 import 'period_parser.dart';
@@ -18,10 +19,13 @@ class PendingClarification {
 }
 
 class AssistantAnswer {
-  const AssistantAnswer(this.text, {this.pending});
+  const AssistantAnswer(this.text, {this.pending, this.registeredId});
 
   final String text;
   final PendingClarification? pending;
+
+  /// Si la respuesta registró un movimiento, su id (la pantalla lo usa para "deshacer").
+  final String? registeredId;
 }
 
 /// Responde una [AssistantIntent] ya clasificada, consultando los datos
@@ -31,13 +35,14 @@ class AssistantAnswer {
 class AssistantEngine {
   // Posicional (como BudgetAlertService), no nombrado: los 5 tipos son
   // distintos entre sí, así que un orden equivocado ya lo atrapa el compilador.
-  AssistantEngine(this._movements, this._accounts, this._budgets, this._currency, this._now);
+  AssistantEngine(this._movements, this._accounts, this._budgets, this._currency, this._now, {this._defaultAccountId});
 
   final MovementRepository _movements;
   final AccountRepository _accounts;
   final BudgetRepository _budgets;
   final String _currency;
   final DateTime _now;
+  final String? _defaultAccountId;
 
   String _money(int minor, {bool showSign = false}) => formatMoney(minor, _currency, showSign: showSign);
 
@@ -55,10 +60,33 @@ class AssistantEngine {
       AccountsStatusIntent() => _accountsStatus(),
       RecentMovementsIntent() => _recentMovements(intent),
       SearchMovementsIntent() => _searchMovements(intent),
+      RegisterMovementIntent() => _register(intent),
       CreateAlertIntent() => _handleCreateAlert(intent),
       UnsupportedAlertIntent() => AssistantAnswer(intent.reason),
       UnknownIntent() => AssistantAnswer(_unknownText),
     };
+  }
+
+  Future<AssistantAnswer> _register(RegisterMovementIntent intent) async {
+    final accounts = await _accounts.watch().first;
+    if (accounts.isEmpty) return const AssistantAnswer('No tienes ninguna cuenta donde registrarlo. Crea una en Ajustes > Cuentas.');
+    final account = accounts.where((a) => a.id == (intent.accountId ?? _defaultAccountId)).firstOrNull ?? accounts.first;
+    final when = intent.yesterday ? _now.subtract(const Duration(days: 1)) : _now;
+    final id = await _movements.add(MovementInput(
+      type: intent.type,
+      amountMinor: intent.amountMinor,
+      categoryId: intent.categoryId,
+      accountId: account.id,
+      occurredAt: when,
+      note: intent.note,
+    ));
+    final what = intent.type.isExpense ? 'Gasto' : 'Ingreso';
+    final note = intent.note == null ? '' : ' (${intent.note})';
+    return AssistantAnswer(
+      'Listo: $what de ${_money(intent.amountMinor)} en ${intent.categoryName}$note, cuenta ${account.name}'
+      '${intent.yesterday ? ', de ayer' : ''}. Escribe "deshacer" si te equivocaste.',
+      registeredId: id,
+    );
   }
 
   Future<AssistantAnswer> _balance() async {
@@ -261,6 +289,7 @@ class AssistantEngine {
       '• "¿cómo van mis presupuestos?"\n'
       '• "mi saldo por cuenta"\n'
       '• "busca uber" (movimientos por nota)\n'
+      '• "gasté 500 en comida" o "cobré 3000 de salario" (lo registro por ti; "deshacer" lo quita)\n'
       '• "avísame si gasto más de 5000 en Comida"\n'
       'Pregúntame como quieras, no hace falta que sea exacto.';
 

@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/date_labels.dart';
+import '../../domain/assistant/text_normalize.dart';
+import '../../domain/bank_movement.dart';
 import '../../domain/enums.dart';
 import '../../domain/models.dart';
 import '../../state/providers.dart';
@@ -23,6 +25,26 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   /// Movimientos deslizados para borrar: se ocultan al instante (un `Dismissible`
   /// debe desaparecer del árbol en el mismo frame) hasta que la base confirme.
   final _hidden = <String>{};
+
+  /// Búsqueda por texto en nota y categoría (sobre lo que el filtro de período/tipo ya muestra).
+  final _searchController = TextEditingController();
+  bool _searching = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _toggleSearch() => setState(() {
+        _searching = !_searching;
+        if (!_searching) _searchController.clear();
+      });
+
+  bool _matches(Movement m, String query) {
+    final haystack = normalize('${m.category.name} ${bankMerchant(m) ?? m.note ?? ''} ${m.account.name}');
+    return query.split(' ').every(haystack.contains);
+  }
 
   Future<void> _delete(Movement m) async {
     final container = ProviderScope.containerOf(context, listen: false);
@@ -107,7 +129,17 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     final filter = ref.watch(historyFilterProvider);
     final currency = ref.watch(currencySymbolProvider).value ?? 'RD\$';
     final summary = ref.watch(historySummaryProvider).value ?? const PeriodSummary();
-    final movements = (ref.watch(historyMovementsProvider).value ?? const <Movement>[]).where((m) => !_hidden.contains(m.id)).toList();
+    final query = normalize(_searchController.text);
+    final movements = (ref.watch(historyMovementsProvider).value ?? const <Movement>[])
+        .where((m) => !_hidden.contains(m.id) && (query.isEmpty || _matches(m, query)))
+        .toList();
+    // Con una búsqueda activa los totales deben corresponder a lo que se ve, no a todo el período.
+    final shownSummary = query.isEmpty
+        ? summary
+        : PeriodSummary(
+            incomeMinor: movements.where((m) => !m.type.isExpense).fold(0, (a, m) => a + m.amountMinor),
+            expenseMinor: movements.where((m) => m.type.isExpense).fold(0, (a, m) => a + m.amountMinor),
+          );
     final category = ref.watch(historyCategoryProvider).value;
     final now = ref.watch(nowProvider);
     final multipleAccounts = (ref.watch(accountsProvider).value?.length ?? 0) > 1;
@@ -131,7 +163,24 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: Text('Movimientos', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+            child: _searching
+                ? TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    textInputAction: TextInputAction.search,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Buscar por comercio, nota o categoría',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: IconButton(tooltip: 'Cerrar búsqueda', icon: const Icon(Icons.close), onPressed: _toggleSearch),
+                    ),
+                  )
+                : Row(
+                    children: [
+                      Expanded(child: Text('Movimientos', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800))),
+                      IconButton(tooltip: 'Buscar', icon: const Icon(Icons.search), onPressed: _toggleSearch),
+                    ],
+                  ),
           ),
           const PeriodChips(),
           const SizedBox(height: 8),
@@ -164,11 +213,11 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: SummaryRow(summary: summary, currency: currency)),
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: SummaryRow(summary: shownSummary, currency: currency)),
           const SizedBox(height: 4),
           Expanded(
             child: items.isEmpty
-                ? Center(child: Text('Sin movimientos en este filtro', style: TextStyle(color: scheme.onSurfaceVariant)))
+                ? Center(child: Text(query.isEmpty ? 'Sin movimientos en este filtro' : 'Nada coincide con "${_searchController.text.trim()}"', style: TextStyle(color: scheme.onSurfaceVariant)))
                 : ListView.builder(
                     padding: const EdgeInsets.only(bottom: 110),
                     itemCount: items.length,
