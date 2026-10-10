@@ -6,7 +6,7 @@ import unicodedata
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import budgets, cards as cardlib, config, export, insights, ledger, mail_source
+from . import budgets, cards as cardlib, config, export, fx, insights, ledger, mail_source
 from .client import Arnic, ApiError
 from .parser import NotAPurchase, categorize, merchant_key, parse_email, parse_qik_deposit
 from .state import State
@@ -95,15 +95,18 @@ def process_mail(mail, cfg, arnic, tg, state, dry_run=False, snapshot=None, quie
     result, failed = "omitido", False
     for p in purchases:
         amount = p.amount_minor
+        rate_note = ""
         if p.currency == "USD":
-            if not cfg.usd_to_local:
+            rate, stale = (cfg.usd_to_local, False) if cfg.usd_to_local else fx.get_usd_to_dop(cfg.fx_cache_path)
+            if not rate:
                 if quiet_log is not None:
                     quiet_log["usd"].append(f"US${amount / 100:,.2f} · {p.merchant}")
                 elif not dry_run:
-                    tg.send(f"💳 Consumo en USD de ${amount / 100:,.2f} en {p.merchant}. No lo registré: falta `usd_to_local` en la config.")
+                    tg.send(f"💳 Consumo en USD de ${amount / 100:,.2f} en {p.merchant}. No lo registré: no hay internet ni una tasa de cambio guardada.")
                 failed = quiet_log is None
                 continue
-            amount = round(amount * cfg.usd_to_local)
+            amount = round(amount * rate)
+            rate_note = f" (US${p.amount_minor / 100:,.2f} a {rate:.2f})" + (" · tasa de ayer, sin internet" if stale else "")
         when = p.when_ms or mail.date_ms
         if snapshot is not None and ledger.is_duplicate(snapshot, amount, when):
             continue
@@ -113,7 +116,7 @@ def process_mail(mail, cfg, arnic, tg, state, dry_run=False, snapshot=None, quie
         learned = ctx.get("learned", {}).get(merchant_key(p.merchant))
         valid = ctx.get("expense_categories")
         category = learned if learned and (valid is None or learned in valid) else categorize(p.merchant, cfg.category_rules, cfg.fallback_category)
-        note = p.merchant + (f" (tarjeta ••{p.card_last4})" if p.card_last4 else "")
+        note = p.merchant + (f" (tarjeta ••{p.card_last4})" if p.card_last4 else "") + rate_note
         account = card.get("account") or cfg.card_account
         if dry_run:
             print(f"[dry-run] {budgets.money(amount, cfg.currency_symbol)} | {category} | {note} | {account or 'cuenta predeterminada'}")
@@ -153,7 +156,7 @@ def _backfill_summary(log, cfg) -> str:
         by_account[account] = by_account.get(account, 0) + amount
     lines = [f"📥 Historial cargado: {len(log['rows'])} consumos"] + [f"  • {a}: {budgets.money(t, cfg.currency_symbol)}" for a, t in sorted(by_account.items())]
     if log["usd"]:
-        lines += [f"⚠️ {len(log['usd'])} en USD sin registrar (falta usd_to_local):"] + [f"  • {u}" for u in log["usd"]]
+        lines += [f"⚠️ {len(log['usd'])} en USD sin registrar (sin tasa de cambio disponible):"] + [f"  • {u}" for u in log["usd"]]
     return "\n".join(lines)
 
 

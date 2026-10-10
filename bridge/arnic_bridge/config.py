@@ -29,7 +29,7 @@ class Config:
     lookback_days: int = 3
     timezone: str = "America/Santo_Domingo"
     currency_symbol: str = "RD$"
-    usd_to_local: float | None = None
+    usd_to_local: float | None = None  # fija una tasa manual; `None` (lo normal) = buscarla sola en internet (ver fx.py)
     card_account: str = ""
     cards: dict = field(default_factory=dict)  # banco -> {"account": nombre, "last4": [...]}; límite y fechas vienen de la app
     salary: dict = field(default_factory=dict)  # {"amount": 30000, "tolerance_pct": 10, "origin_contains": ["reserva"], "account": "Qik ahorros", "category": "Salario"}
@@ -39,6 +39,7 @@ class Config:
     category_rules: dict = field(default_factory=lambda: dict(DEFAULT_CATEGORY_RULES))
     telegram_config_path: str = "/home/yordany/Escritorio/AI/telegram_bot/config.json"
     state_path: str = ""
+    fx_cache_path: str = ""
 
 
 def load(path: str | None = None) -> Config:
@@ -53,4 +54,6 @@ def load(path: str | None = None) -> Config:
     cfg = Config(**raw, category_rules=rules)
     if not cfg.state_path:
         cfg.state_path = str(path.parent / "state.db")
+    if not cfg.fx_cache_path:
+        cfg.fx_cache_path = str(path.parent / "fx_cache.json")
     return cfg

@@ -1,11 +1,14 @@
+import json
 import sys
+import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from arnic_bridge import budgets, cards as cardlib, export, insights, ledger, mail_source
+from arnic_bridge import budgets, cards as cardlib, export, fx, insights, ledger, mail_source
 from arnic_bridge.config import DEFAULT_CATEGORY_RULES
 from arnic_bridge.parser import NotAPurchase, categorize, foreign_country, merchant_key, parse_amount, parse_email, parse_purchase, parse_qik_deposit
 
@@ -382,6 +385,122 @@ class Reports(unittest.TestCase):
                 self.assertIsNone(z.testzip())
                 self.assertIn("BURGER KING", z.read("xl/worksheets/sheet2.xml").decode())
                 self.assertIn('name="Movimientos"', z.read("xl/workbook.xml").decode())
+
+
+class Fx(unittest.TestCase):
+    def cache_path(self, tmp):
+        return f"{tmp}/fx_cache.json"
+
+    def test_fetch_live_tries_sources_in_order_and_skips_ones_without_dop(self):
+        responses = [
+            type("R", (), {"read": lambda self: json.dumps({"rates": {"EUR": 0.9}}).encode(), "__enter__": lambda self: self, "__exit__": lambda *a: None})(),
+            type("R", (), {"read": lambda self: json.dumps({"rates": {"DOP": 61.2}}).encode(), "__enter__": lambda self: self, "__exit__": lambda *a: None})(),
+        ]
+        with patch("urllib.request.urlopen", side_effect=responses):
+            self.assertEqual(fx._fetch_live(), 61.2)
+
+    def test_fetch_live_none_when_all_sources_fail(self):
+        with patch("urllib.request.urlopen", side_effect=OSError("sin red")):
+            self.assertIsNone(fx._fetch_live())
+
+    def test_get_usd_to_dop_fetches_and_caches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.cache_path(tmp)
+            with patch("arnic_bridge.fx._fetch_live", return_value=60.5) as fetch:
+                rate, stale = fx.get_usd_to_dop(path)
+                self.assertEqual((rate, stale), (60.5, False))
+                with open(path) as f:
+                    self.assertEqual(json.load(f)["rate"], 60.5)
+                fx.get_usd_to_dop(path)  # dentro de la ventana de caché: no vuelve a pedir
+                fetch.assert_called_once()
+
+    def test_get_usd_to_dop_refetches_after_max_age(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.cache_path(tmp)
+            now = 1_000_000.0
+            with patch("arnic_bridge.fx._fetch_live", return_value=60.0):
+                fx.get_usd_to_dop(path, max_age_hours=1, now=now)
+            with patch("arnic_bridge.fx._fetch_live", return_value=61.0) as fetch:
+                rate, stale = fx.get_usd_to_dop(path, max_age_hours=1, now=now + 3700)  # más de 1 hora después
+                self.assertEqual((rate, stale), (61.0, False))
+                fetch.assert_called_once()
+
+    def test_get_usd_to_dop_falls_back_to_stale_cache_without_internet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.cache_path(tmp)
+            with patch("arnic_bridge.fx._fetch_live", return_value=60.0):
+                fx.get_usd_to_dop(path, max_age_hours=0.001, now=1000)
+            with patch("arnic_bridge.fx._fetch_live", return_value=None):
+                rate, stale = fx.get_usd_to_dop(path, max_age_hours=0.001, now=2000)
+                self.assertEqual((rate, stale), (60.0, True))
+
+    def test_get_usd_to_dop_none_without_cache_or_internet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("arnic_bridge.fx._fetch_live", return_value=None):
+                self.assertEqual(fx.get_usd_to_dop(self.cache_path(tmp)), (None, False))
+
+
+class UsdConversion(unittest.TestCase):
+    """process_mail con un consumo en dólares: la tasa se busca sola (fx.get_usd_to_dop), con override manual."""
+
+    BHD_USD = ("BHD Notificación de Transacciones Mastercard Local # 1111 Te notificamos la transacción realizada con tu Tarjeta Mastercard Local # 1111 \n"
+               "Detalle de Transacciones \n \n Fecha \n \n Moneda \n \n Monto \n \n Comercio \n \n Estado \n \n Tipo \n \n"
+               " 09/10/2026 03:34 am \n \n US \n \n $20.78 \n \n ANTHROPIC* CLAUDE SUB \n \n Aprobada \n \n Compra \n \n Ahora, tus Tarjetas BHD")
+
+    def mail(self):
+        from types import SimpleNamespace
+        return SimpleNamespace(message_id="1", sender="alertas@bhd.com.do", subject="x", body=self.BHD_USD, date_ms=0)
+
+    def cfg(self, **over):
+        from types import SimpleNamespace
+        base = dict(cards={"bhd": {"account": "Tarjeta BHD", "last4": ["1111"]}}, usd_to_local=None, card_account="",
+                    category_rules={}, fallback_category="Otros", currency_symbol="RD$", fx_cache_path="/no/existe.json")
+        base.update(over)
+        return SimpleNamespace(**base)
+
+    def test_auto_rate_converts_and_notes_it(self):
+        from arnic_bridge import cli
+        sent, added = [], []
+        tg, state = type("T", (), {"send": staticmethod(sent.append)})(), type("S", (), {"has": staticmethod(lambda k: False), "add": staticmethod(lambda k: None)})()
+        arnic = type("A", (), {"add_expense": staticmethod(lambda *a: added.append(a))})()
+        with patch("arnic_bridge.fx.get_usd_to_dop", return_value=(60.0, False)) as get_rate:
+            result = cli.process_mail(self.mail(), self.cfg(), arnic, tg, state)
+        self.assertEqual(result, "registrado")
+        get_rate.assert_called_once_with("/no/existe.json")
+        self.assertEqual(added[0][0], round(2078 * 60.0))  # $20.78 convertidos a pesos
+        self.assertIn("US$20.78 a 60.00", added[0][2])  # la nota deja constancia de la conversión
+        self.assertIn("RD$1,246.80", sent[0])  # $20.78 x 60.00 ya convertidos, en el aviso a Telegram
+
+    def test_manual_override_skips_the_lookup(self):
+        from arnic_bridge import cli
+        added = []
+        tg, state = type("T", (), {"send": staticmethod(lambda *a: None)})(), type("S", (), {"has": staticmethod(lambda k: False), "add": staticmethod(lambda k: None)})()
+        arnic = type("A", (), {"add_expense": staticmethod(lambda *a: added.append(a))})()
+        with patch("arnic_bridge.fx.get_usd_to_dop") as get_rate:
+            cli.process_mail(self.mail(), self.cfg(usd_to_local=58.0), arnic, tg, state)
+        get_rate.assert_not_called()
+        self.assertEqual(added[0][0], round(2078 * 58.0))
+
+    def test_stale_rate_is_flagged_in_the_note(self):
+        from arnic_bridge import cli
+        added = []
+        tg, state = type("T", (), {"send": staticmethod(lambda *a: None)})(), type("S", (), {"has": staticmethod(lambda k: False), "add": staticmethod(lambda k: None)})()
+        arnic = type("A", (), {"add_expense": staticmethod(lambda *a: added.append(a))})()
+        with patch("arnic_bridge.fx.get_usd_to_dop", return_value=(60.0, True)):
+            cli.process_mail(self.mail(), self.cfg(), arnic, tg, state)
+        self.assertIn("sin internet", added[0][2])
+
+    def test_no_rate_available_notifies_and_does_not_mark_seen(self):
+        from arnic_bridge import cli
+        sent, seen = [], []
+        tg = type("T", (), {"send": staticmethod(sent.append)})()
+        state = type("S", (), {"has": staticmethod(lambda k: False), "add": staticmethod(lambda k: seen.append(k))})()
+        arnic = type("A", (), {"add_expense": staticmethod(lambda *a: self.fail("no debería registrar nada"))})()
+        with patch("arnic_bridge.fx.get_usd_to_dop", return_value=(None, False)):
+            result = cli.process_mail(self.mail(), self.cfg(), arnic, tg, state)
+        self.assertEqual(result, "error")
+        self.assertEqual(seen, [])  # sin marcar visto: se reintenta en la próxima corrida
+        self.assertIn("No lo registré", sent[0])
 
 
 if __name__ == "__main__":
